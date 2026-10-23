@@ -50,3 +50,5 @@ body.focus-mode main{grid-template-columns:minmax(0,1fr)}
 aside#projectPanel{bottom:var(--summary-height);max-height:calc(100dvh - var(--header) - var(--summary-height));}
 .results-panel{bottom:var(--summary-height)}
 @media(max-width:1000px){.metrics{grid-template-columns:repeat(3,minmax(0,1fr));row-gap:8px}.metrics>div:nth-child(4){display:flex}.metrics>button{max-width:none}}
+
+tr[aria-selected=true]{background:#754621;color:#fff2d5}tr[aria-selected=true] td:first-child{color:#ffe0a1}
