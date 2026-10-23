@@ -25,7 +25,7 @@ window.reveraInstall=(deps,createScene)=>{
  // Tool rail state also follows menu commands and keyboard shortcuts.
  const toolObserver=new MutationObserver(()=>{const tool=activeDrawingTool();if(faceMode&&tool&&tool!=='Select')resumeDrawing();});
  toolObserver.observe(document.body,{subtree:true,attributes:true,attributeFilter:['aria-checked']});
- function guardKeys(e){if(faceMode&&['Delete','Backspace'].includes(e.key)&&!e.target.closest?.('input,textarea,[contenteditable=true]')){e.preventDefault();e.stopImmediatePropagation();}}
+ function guardKeys(e){if(faceMode&&['Delete','Backspace'].includes(e.key)&&!e.target.closest?.('input,textarea,[contenteditable=true]')){e.preventDefault();e.stopImmediatePropagation();if(e.key==='Delete'&&selectedFace)parent.postMessage({channel:'revera-delete-face'},location.origin);}}
  window.addEventListener('keydown',guardKeys,true);
  function capture(e){if(e.type==='pointerdown'&&e.target===renderer())parent.postMessage({channel:'revera-drawing-interaction'},location.origin);const tool=activeDrawingTool();if(faceMode&&tool&&tool!=='Select')resumeDrawing();if(!faceMode||e.button!==0||e.target!==renderer())return;e.stopImmediatePropagation();e.preventDefault();if(e.type==='pointerdown')down=[e.clientX,e.clientY];if(e.type==='pointerup'&&down){const moved=Math.hypot(e.clientX-down[0],e.clientY-down[1]);down=null;if(moved>5)return;selectionModule.then(({pickFace,cameraRay})=>{if(selectionHash!==active().state_hash().toString()){parent.postMessage({channel:'revera-face-stale'},location.origin);return;}const r=renderer().getBoundingClientRect(),camera=deps.getViewportApi()?.getCameraState();if(!camera)return;const ray=cameraRay(camera,e.clientX-r.left,e.clientY-r.top,r.width,r.height);selectedFace=pickFace(selectionFaces,ray.origin,ray.direction);parent.postMessage({channel:'revera-face',face:selectedFace},location.origin);});}}
  for(const type of ['pointerdown','pointerup','dblclick','click'])window.addEventListener(type,capture,true);
@@ -47,7 +47,9 @@ window.reveraInstall=(deps,createScene)=>{
    if(busy)throw Error('Hay otra operación en curso en el editor.');busy=true;
    const scene=active();let result;
    if(method==='face-mode'){faceMode=!!params.enabled;selectionFaces=params.faces||[];selectedFace=null;selectionHash=scene.state_hash().toString();if(faceMode){document.querySelector('[role="radio"][aria-label="Select"]')?.click();deps.getViewportApi()?.clearObjectHighlight();}result={done:true};}
-   else if(method==='ping')result={ready:true,version:'1.2.3',objects:rpc(scene,'hew.query.scene').document.objects,sketches:rpc(scene,'hew.query.scene').document.sketches};
+   else if(method==='delete-face'){const {removeDrawingFace}=await import('/face-edit.js');result=removeDrawingFace(scene,rpc,params.face);selectedFace=null;faceMode=false;deps.getViewportApi()?.refreshScene();deps.reconcileVisibility?.();}
+   else if(method==='undo-face'){if(params.hash!==scene.state_hash().toString())throw Error('El dibujo cambió después del borrado. Usa Editar → Deshacer para revisar el historial.');rpc(scene,'hew.history.undo');selectedFace=null;faceMode=false;deps.getViewportApi()?.refreshScene();deps.reconcileVisibility?.();result={done:true};}
+   else if(method==='ping')result={ready:true,version:'1.2.3',hash:scene.state_hash().toString(),objects:rpc(scene,'hew.query.scene').document.objects,sketches:rpc(scene,'hew.query.scene').document.sketches};
    else if(method==='snapshot'){
     // Host export preserves non-solid sheets. API export intentionally filters
     // them, which is inappropriate for an acoustic surface model.

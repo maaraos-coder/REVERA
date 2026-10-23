@@ -12,7 +12,7 @@ function compute(method,body){return new Promise((resolve,reject)=>{const id=++j
 const canvas=$('view'),ctx=canvas.getContext('2d');
 let selectedFace=null,faceProperties={},projectedFaces=[],faceSelection=false;
 let yaw=-.8,pitch=.55,zoom=1,drag=null;
-const controls=['demo','extract','file','project','save','sync','saveHew'];
+const controls=['demo','extract','file','project','save','sync','saveHew','deleteFace'];
 function message(text,error=false){$('message').textContent=text;$('message').style.borderColor=error?'#edab77':'#80cbb4';}
 async function action(fn){if(busy)return;busy=true;controls.forEach(id=>$(id).disabled=true);try{await fn();}catch(e){message(e.message,true);}finally{busy=false;controls.forEach(id=>$(id).disabled=false);$('save').disabled=!editorReady;$('extract').disabled=!editorReady;}}
 function load(data){clearFace();model=data;result=null;mode='architecture';zoom=1;$('modelName').textContent=data.name;renderResult();message(data.warnings?.join(' ')||'Modelo cargado. Indica un punto dentro del aire y genera la envolvente acústica.');draw();}
@@ -108,7 +108,7 @@ canvas.addEventListener('wheel',e=>{e.preventDefault();zoom=Math.max(.2,Math.min
 new ResizeObserver(draw).observe(canvas);
 window.addEventListener('revera-editor-ready',async event=>{
  if(!editorReady){editorReady=true;$('status').textContent='Editor 3D conectado · procesamiento en tu navegador';$('extract').disabled=false;$('save').disabled=false;}
- const hash=event.detail?.hash;if(hash&&lastEditorHash&&hash!==lastEditorHash){clearFace();if(faceSelection){faceSelection=false;$('faceMode').setAttribute('aria-pressed','false');editorCall('face-mode',{enabled:false}).catch(()=>{});message('Cambió la geometría. Activa de nuevo Seleccionar caras para actualizar las superficies.');}}if(hash&&lastEditorHash&&hash!==lastEditorHash&&result){result=null;mode=mode==='acoustic'?'editor':mode;renderResult();message('Cambió el dibujo. Genera nuevamente el modelo acústico para actualizar sus resultados.');}
+ const hash=event.detail?.hash;if(faceEditHash&&hash&&hash!==faceEditHash){setFaceUndo(false);faceEditHash=null;}if(hash&&lastEditorHash&&hash!==lastEditorHash){clearFace();if(faceSelection){faceSelection=false;$('faceMode').setAttribute('aria-pressed','false');editorCall('face-mode',{enabled:false}).catch(()=>{});message('Cambió la geometría. Activa de nuevo Seleccionar caras para actualizar las superficies.');}}if(hash&&lastEditorHash&&hash!==lastEditorHash&&result){result=null;mode=mode==='acoustic'?'editor':mode;renderResult();message('Cambió el dibujo. Genera nuevamente el modelo acústico para actualizar sus resultados.');}
  if(hash)lastEditorHash=hash;
 });
 try{if(localStorage.getItem('revera-project-v2'))$('localStatus').textContent='Hay un proyecto anterior disponible para recuperar';}catch{}
@@ -151,3 +151,18 @@ canvas.addEventListener('pointerdown',()=>setPanelHidden(true));
 window.addEventListener('blur',()=>{if(document.activeElement===$('editor'))setPanelHidden(true);});
 window.addEventListener('revera-drawing-interaction',()=>setPanelHidden(true));
 window.addEventListener('keydown',e=>{if(e.key==='Escape')setPanelHidden(true);});
+
+let faceEditHash=null;
+function setFaceUndo(enabled){$('undoFace').disabled=!enabled;$('undoFaceToolbar').disabled=!enabled;}
+$('deleteFace').onclick=()=>action(async()=>{
+ if(!selectedFace)throw Error('Selecciona una cara del dibujo.');
+ const face=structuredClone(selectedFace);message('Borrando únicamente la cara seleccionada…');
+ const reply=await editorCall('delete-face',{face});faceSelection=false;$('faceMode').setAttribute('aria-pressed','false');clearFace();result=null;model=null;mode='editor';renderResult();
+ const state=await editorCall('ping');faceEditHash=state.hash;lastEditorHash=state.hash||lastEditorHash;setFaceUndo(true);
+ message(reply.opened?'Cara borrada. El objeto ahora está abierto. Puedes deshacer el borrado antes de continuar editando.':'Cara borrada. Era la última superficie del objeto. Puedes deshacer.');
+});
+const undoDeletedFace=()=>action(async()=>{await editorCall('undo-face',{hash:faceEditHash});setFaceUndo(false);faceEditHash=null;faceSelection=false;$('faceMode').setAttribute('aria-pressed','false');clearFace();model=null;result=null;mode='editor';renderResult();message('Borrado deshecho. La cara original está recuperada.');});
+$('undoFace').onclick=$('undoFaceToolbar').onclick=undoDeletedFace;
+
+window.addEventListener('revera-delete-face',()=>{if(selectedFace&&!busy)$('deleteFace').click();});
+window.addEventListener('keydown',e=>{if(e.key==='Delete'&&selectedFace&&!busy&&!e.target.closest('input,textarea,select,[contenteditable]')){e.preventDefault();$('deleteFace').click();}});
