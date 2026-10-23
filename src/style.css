@@ -3,3 +3,17 @@
 .face-panel{position:absolute;right:16px;top:64px;width:280px;max-height:calc(100% - 150px);overflow:auto;padding:16px;background:#122131f5;border:1px solid #416073;border-radius:10px;z-index:8;box-shadow:0 12px 40px #0005}.face-panel[hidden]{display:none}.face-panel h2{font-size:15px;margin:0}.face-panel label{display:block;margin:10px 0;font-size:12px}.face-panel input{width:100%;box-sizing:border-box}.face-panel #faceGeometry{font-size:12px;line-height:1.8;color:#a8c3d3}.face-panel .inputs{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.face-panel .inputs label{margin:0}.face-panel button[type=submit]{margin-top:14px;width:100%}#faceMode[aria-pressed=true]{background:#244b48;color:#a0f2d2}tr[aria-selected=true]{background:#275a59}tbody tr{cursor:pointer}@media(max-width:600px){.face-panel{width:240px;right:8px;top:106px}}
 
 .face-panel input{background:#0b1622;border:1px solid #354d60;color:#deedf4;border-radius:5px;padding:8px;font:inherit}
+
+/* Compact workspace: always reserve only the icon rail. */
+:root{--header:38px;--panel:246px}
+.app-header{padding:0 10px;gap:12px}.brand{font-size:17px;letter-spacing:3px}.brand span{font-size:6px;margin-top:2px}.workspace-name{font-size:10px}.badge{font-size:8px;padding:3px 5px}.header-divider{height:18px}
+main,body.panel-hidden main{grid-template-columns:54px minmax(0,1fr)}
+.project-rail{grid-column:1;grid-row:1;display:flex;flex-direction:column;align-items:center;gap:10px;padding:12px 5px;background:#101925;border-right:1px solid var(--line);z-index:21}
+.project-rail button{width:40px;height:40px;font-size:23px;line-height:1;padding:6px;color:#93aaba}.project-rail button[aria-expanded=true]{background:#24443f;color:#a0efda;box-shadow:inset 2px 0 #8bd5bf}
+.workspace{grid-column:2;grid-row:1;padding:0 5px 4px;gap:4px}
+aside{position:fixed;top:var(--header);bottom:0;left:54px;width:var(--panel);z-index:20;padding:14px 12px;box-shadow:12px 0 35px #0007;border-right:1px solid #3b5061}
+.panel-heading{padding-bottom:12px}.panel-heading h1{font-size:15px}.control-group>summary{padding:12px 2px}.group-body{padding-bottom:12px}
+.toolbar,body.focus-mode .toolbar{height:36px;min-height:36px;gap:8px}.tabs{padding:2px;gap:2px}.tabs button{padding:5px 10px;font-size:10px}.view-actions button{padding:5px 8px;font-size:10px}.focus-button{padding:5px 8px;margin-left:2px}.view-actions{gap:3px}
+.metrics{height:30px;min-height:30px}.metrics>div{padding:0 12px}.metrics strong{font-size:11px}.metrics small{font-size:7px}#resultsToggle{padding:6px 10px}#message{min-height:20px;padding:3px 8px;font-size:9px}
+.face-panel{top:44px}.results-panel{bottom:60px}body.focus-mode main{grid-template-columns:minmax(0,1fr)}body.focus-mode .project-rail{display:none}body.focus-mode .workspace{grid-column:1}
+@media(max-width:800px){:root{--header:38px;--panel:240px}.app-header{gap:8px}.brand{font-size:16px}main,body.panel-hidden main{grid-template-columns:46px minmax(0,1fr)}.project-rail{padding:10px 3px}.project-rail button{width:36px;height:38px}aside{left:46px;width:min(var(--panel),calc(100vw - 46px))}.toolbar{min-height:36px;height:auto}.tabs button{padding:5px 7px}.face-panel{top:44px}.metrics>div{padding:0 8px}}

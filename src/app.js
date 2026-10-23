@@ -117,7 +117,7 @@ renderResult();message('Dibuja con el editor, importa un archivo o crea una sala
 // Drawing-first workspace: layout controls never reload the editor iframe.
 const panelToggle=$('panelToggle'),focusToggle=$('focusToggle');
 function setPanelHidden(hidden){document.body.classList.toggle('panel-hidden',hidden);panelToggle.setAttribute('aria-expanded',String(!hidden));panelToggle.title=hidden?'Mostrar panel del proyecto':'Ocultar panel del proyecto';}
-setPanelHidden(window.matchMedia('(max-width: 800px)').matches);
+setPanelHidden(true);
 panelToggle.onclick=()=>{if(document.body.classList.contains('focus-mode')){setFocus(false);setPanelHidden(false);return;}setPanelHidden(!document.body.classList.contains('panel-hidden'));};
 function setFocus(on){document.body.classList.toggle('focus-mode',on);focusToggle.setAttribute('aria-pressed',String(on));focusToggle.textContent=on?'↙ Salir del modo dibujo':'⛶ Modo dibujo';panelToggle.setAttribute('aria-expanded',String(!on&&!document.body.classList.contains('panel-hidden')));requestAnimationFrame(draw);}
 focusToggle.onclick=()=>setFocus(!document.body.classList.contains('focus-mode'));
@@ -136,3 +136,18 @@ window.addEventListener('revera-face',e=>selectFace(e.detail));
 window.addEventListener('revera-face-stale',()=>{clearFace();message('Cambió el dibujo. Desactiva y vuelve a activar Seleccionar caras para actualizarlo.',true);});
 
 window.addEventListener('revera-face-mode',()=>{faceSelection=false;clearFace();$('faceMode').setAttribute('aria-pressed','false');message('Herramienta de dibujo activa. Puedes dibujar normalmente; vuelve a Seleccionar caras para editar propiedades acústicas.');});
+
+// Compact project rail: panels overlay the drawing instead of shrinking it.
+const railButtons=[...document.querySelectorAll('[data-project]')],projectGroups=[...$('projectPanel').querySelectorAll(':scope > details.control-group')];
+let activeProject=0;
+const projectTitles=['Importar modelo','Sala de prueba','Modelo acústico','Guardar y recuperar'];
+function showProject(index){const alreadyOpen=!document.body.classList.contains('panel-hidden')&&activeProject===index;if(document.body.classList.contains('focus-mode'))setFocus(false);activeProject=index;projectGroups.forEach((group,i)=>{group.hidden=i!==index;group.open=i===index;});$('projectPanel').querySelector('h1').textContent=projectTitles[index];setPanelHidden(alreadyOpen);}
+railButtons.forEach(button=>button.onclick=()=>showProject(Number(button.dataset.project)));
+const panelState=new MutationObserver(()=>{const open=!document.body.classList.contains('panel-hidden')&&!document.body.classList.contains('focus-mode');railButtons.forEach((button,i)=>button.setAttribute('aria-expanded',String(open&&i===activeProject)));});
+panelState.observe(document.body,{attributes:true,attributeFilter:['class']});
+$('panelClose').onclick=()=>{setPanelHidden(true);railButtons[activeProject].focus();};
+panelToggle.onclick=()=>showProject(activeProject);
+canvas.addEventListener('pointerdown',()=>setPanelHidden(true));
+window.addEventListener('blur',()=>{if(document.activeElement===$('editor'))setPanelHidden(true);});
+window.addEventListener('revera-drawing-interaction',()=>setPanelHidden(true));
+window.addEventListener('keydown',e=>{if(e.key==='Escape')setPanelHidden(true);});
