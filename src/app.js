@@ -86,22 +86,22 @@ $('file').onchange=event=>action(async()=>{
    await editorCall('load',{bytes});
   }else await editorCall('import',{name:file.name,bytes,units:$('dxfUnits').value||'m'});
   await syncModel(file.name);const {center}=bounds();['sx','sy','sz'].forEach((id,k)=>$(id).value=center[k].toFixed(3));mode='editor';renderResult();
-  message('Modelo importado. Revisa unidades, orientación D/F y cierre del recinto.');
+  await reviewRoom(true);
  }
 });
-async function reviewRoom(orient=false){
+async function reviewRoom(orient=true){
  message('Revisando orientación D/F y cierre de la envolvente…');await syncModel(model?.name);
  result=await compute('review',{faces:model.faces,options:{thick:$('thickModel').checked,flipped:[...orientationOverrides],orient}});
  if(result.orientation_valid)assignFaceDefaults(result.faces,faceProperties);
  for(const key of result.reversed_keys){if(orientationOverrides.has(key))orientationOverrides.delete(key);else orientationOverrides.add(key);}
  reviewedHash=lastEditorHash;calculated=false;mode='acoustic';renderResult();draw();setResults(false);
- message(result.valid?'Recinto validado: caras D y envolvente cerrada. Pulsa Calcular recinto validado.':result.errors.join(' '),!result.valid);persist();
+ const corrected=result.reversed_keys.length;message((corrected?`${corrected} caras orientadas automáticamente hacia dentro. `:'')+(result.valid?'Recinto validado: caras D y envolvente cerrada. Pulsa Calcular recinto validado.':result.errors.join(' ')),!result.valid);persist();
 }
 $('extract').onclick=()=>action(()=>reviewRoom());
 $('orientFaces').onclick=()=>action(()=>reviewRoom(true));
 $('calculateRoom').onclick=()=>action(async()=>{if(!result?.valid)throw Error('Revisa y valida primero la orientación y el cierre.');const state=await editorCall('ping');if(state.hash!==reviewedHash){result=null;calculated=false;renderResult();throw Error('El dibujo cambió. Revisa nuevamente el recinto.');}calculated=true;renderResult();draw();message(`Recinto calculado: ${result.face_count} caras · ${result.surface_m2.toFixed(2)} m² · ${result.volume_m3.toFixed(2)} m³.`);});
 $('thickModel').onchange=()=>{result=null;calculated=false;renderResult();};
-$('invertAcousticFace').onclick=()=>action(async()=>{if(!selectedFace||!result)return;const key=faceKey(selectedFace);if(orientationOverrides.has(key))orientationOverrides.delete(key);else orientationOverrides.add(key);await reviewRoom();});
+$('invertAcousticFace').onclick=()=>action(async()=>{if(!selectedFace||!result)return;const key=faceKey(selectedFace);if(orientationOverrides.has(key))orientationOverrides.delete(key);else orientationOverrides.add(key);await reviewRoom(false);});
 for(const view of ['drawing','architecture','acoustic'])$(view).onclick=()=>{mode=view==='drawing'?'editor':view;renderResult();draw();};
 $('roof').onchange=draw;$('fit').onclick=()=>{zoom=1;yaw=-.8;pitch=.55;draw();};
 for(const id of ['sx','sy','sz','surfaceOnly'])$(id).oninput=()=>{if(result){result=null;mode='architecture';renderResult();message('Cambió el punto interior. Genera nuevamente el modelo acústico.');}draw();};
