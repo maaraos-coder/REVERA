@@ -1,3 +1,4 @@
+import {acousticSummary} from './acoustic-summary.js';
 import {faceKey,bands,absorption} from './face-selection.js';
 import {demoFaces,prepare} from './geometry.js';
 import {editorCall,encodeBytes,roomCommands} from './editor-client.js';
@@ -18,6 +19,7 @@ function message(text,error=false){$('message').textContent=text;$('message').st
 async function action(fn){if(busy)return;busy=true;controls.forEach(id=>$(id).disabled=true);try{await fn();}catch(e){message(e.message,true);}finally{busy=false;controls.forEach(id=>$(id).disabled=false);$('save').disabled=!editorReady;$('extract').disabled=!editorReady;}}
 function load(data){clearFace();model=data;result=null;mode='architecture';zoom=1;$('modelName').textContent=data.name;renderResult();message(data.warnings?.join(' ')||'Modelo cargado. Indica un punto dentro del aire y genera la envolvente acústica.');draw();}
 function renderResult(){
+ renderAbsorption();
  $('drawing').setAttribute('aria-pressed',String(mode==='editor'));
  $('editor').hidden=mode!=='editor';canvas.hidden=mode==='editor';$('canvasLabels').hidden=mode==='editor';
  $('architecture').setAttribute('aria-pressed',String(mode==='architecture'));
@@ -83,7 +85,7 @@ $('file').onchange=event=>action(async()=>{
  }
 });
 $('extract').onclick=()=>action(async()=>{
- message('Leyendo el dibujo actual y comprobando el recinto…');await syncModel(model?.name);result=await compute('extract',{faces:model.faces.map(f=>$('surfaceOnly').checked?{...f,is_solid:false}:f),seed:seed()});mode='acoustic';renderResult();draw();
+ message('Leyendo el dibujo actual y comprobando el recinto…');await syncModel(model?.name);result=await compute('extract',{faces:model.faces.map(f=>({...f,source_key:faceKey(f),...($('surfaceOnly').checked?{is_solid:false}:{})})),seed:seed()});mode='acoustic';renderResult();draw();
  message(result.valid?`Envolvente cerrada: ${result.face_count} caras. El dibujo original se conserva. Verifica la selección antes del cálculo.`:result.errors.join(' '),!result.valid);persist();
 });
 for(const view of ['drawing','architecture','acoustic'])$(view).onclick=()=>{mode=view==='drawing'?'editor':view;renderResult();draw();};
@@ -131,7 +133,7 @@ function clearFace(){selectedFace=null;$('facePanel').hidden=true;}
 function selectFace(face){selectedFace=face;$('facePanel').hidden=!face;if(!face)return;const data=faceProperties[faceKey(face)]||{};$('faceGeometry').textContent=`${face.id} · ${face.area.toFixed(3)} m² · Normal: ${face.normal.map(v=>v.toFixed(2)).join(', ')}`;$('faceName').value=data.name||face.name||face.id;$('faceMaterial').value=data.material||'';bands.forEach((band,i)=>$('alpha'+band).value=data.alpha?.[i]??'');for(const row of $('faces').rows)row.setAttribute('aria-selected',String(row.cells[0]?.textContent===face.id));}
 for(const band of bands){const label=document.createElement('label');label.textContent=band+' Hz';const input=document.createElement('input');input.id='alpha'+band;input.type='number';input.min=0;input.max=1;input.step=.01;input.placeholder='—';input.required=true;label.append(input);$('absorptionInputs').append(label);}
 $('faceClose').onclick=()=>{clearFace();draw();if(faceSelection)editorCall('face-mode',{enabled:true,faces:model?.faces||[]}).catch(()=>{});};
-$('faceForm').onsubmit=e=>{e.preventDefault();if(!selectedFace)return;try{const alpha=absorption(bands.map(b=>Number($('alpha'+b).value)));faceProperties[faceKey(selectedFace)]={name:$('faceName').value.trim(),material:$('faceMaterial').value.trim(),alpha};persist();message('Propiedades guardadas para esta cara. Descarga el proyecto REVERA para conservarlas con el dibujo.');}catch(error){message(error.message,true);}};
+$('faceForm').onsubmit=e=>{e.preventDefault();if(!selectedFace)return;try{const alpha=absorption(bands.map(b=>Number($('alpha'+b).value)));faceProperties[faceKey(selectedFace)]={name:$('faceName').value.trim(),material:$('faceMaterial').value.trim(),alpha};persist();renderAbsorption();message('Propiedades guardadas para esta cara. Descarga el proyecto REVERA para conservarlas con el dibujo.');}catch(error){message(error.message,true);}};
 $('faceMode').onclick=()=>action(async()=>{if(eraseSelection){await editorCall('erase-mode',{enabled:false});setEraseState(false);}if(faceSelection){await editorCall('face-mode',{enabled:false});faceSelection=false;}else{message('Preparando selección de superficies…');const data=await syncModel(model?.name);await editorCall('face-mode',{enabled:true,faces:data.faces});faceSelection=true;mode='editor';renderResult();message('Haz clic en una cara para consultar su área y editar sus propiedades acústicas. Para modificar el dibujo, vuelve a Seleccionar y pulsa Supr sobre la cara elegida.');}clearFace();$('faceMode').setAttribute('aria-pressed',String(faceSelection));});
 window.addEventListener('revera-face',e=>selectFace(e.detail));
 window.addEventListener('revera-face-stale',()=>{clearFace();message('Cambió el dibujo. Desactiva y vuelve a activar Propiedades de cara para actualizarlo.',true);});
@@ -175,3 +177,12 @@ window.addEventListener('revera-erase-face',e=>{if(!busy&&eraseSelection&&e.deta
 window.addEventListener('revera-erase-toggle',()=>{if(!busy)$('eraseFaces').click();});
 
 window.addEventListener('revera-delete-selected-face',e=>{if(!busy&&e.detail)deleteDrawingFace(e.detail);});
+
+function renderAbsorption(){
+ const summary=acousticSummary(result,faceProperties),host=$('absorptionSummary');host.replaceChildren();
+ $('assignedArea').textContent=summary?`${summary.assignedArea.toFixed(2)} m²`:'—';
+ if(!summary){host.textContent='Valida un recinto cerrado para calcular la absorción.';return;}
+ const note=document.createElement('p');note.textContent=`Absorción equivalente A = Σ(S × α). ${summary.complete?'Todas las caras tienen coeficientes.':`Resultado parcial: faltan coeficientes en ${summary.missingArea.toFixed(2)} m².`} Los colores del dibujo no asignan absorción.`;host.append(note);
+ const table=document.createElement('table'),head=table.createTHead().insertRow();['Banda · Hz',...summary.bands].forEach(v=>{const th=document.createElement('th');th.textContent=v;head.append(th);});const row=table.createTBody().insertRow();['A · m² equivalentes'+(summary.complete?'':' (parcial)'),...summary.equivalent.map(v=>v.toFixed(2))].forEach(v=>row.insertCell().textContent=v);host.append(table);
+ const details=document.createElement('p');details.textContent=summary.faces.map(f=>`${f.id}: ${f.area.toFixed(2)} m² · ${f.material}${f.alpha?'':' · α pendiente'}`).join(' | ');host.append(details);
+}
