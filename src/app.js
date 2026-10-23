@@ -1,0 +1,112 @@
+import {demoFaces,prepare} from './geometry.js';
+import {editorCall,encodeBytes,roomCommands} from './editor-client.js';
+import {parseDxf} from './dxf.js';
+const $=id=>document.getElementById(id);
+let model=null,result=null,mode='editor',busy=false,editorReady=false,lastEditorHash=null;
+const worker=new Worker(new URL('./geometry-worker.js',import.meta.url),{type:'module'});
+let job=0;const jobs=new Map();
+worker.onmessage=({data})=>{const pending=jobs.get(data.id);if(!pending)return;clearTimeout(pending.timer);jobs.delete(data.id);data.error?pending.reject(Error(data.error)):pending.resolve(data.result);};
+function compute(method,body){return new Promise((resolve,reject)=>{const id=++job;const timer=setTimeout(()=>{jobs.delete(id);reject(Error('La geometría tardó demasiado. Simplifica el modelo.'));},45000);jobs.set(id,{resolve,reject,timer});worker.postMessage({id,method,...body});});}
+
+const canvas=$('view'),ctx=canvas.getContext('2d');
+let yaw=-.8,pitch=.55,zoom=1,drag=null;
+const controls=['demo','extract','file','project','save','sync','saveHew'];
+function message(text,error=false){$('message').textContent=text;$('message').style.borderColor=error?'#edab77':'#80cbb4';}
+async function action(fn){if(busy)return;busy=true;controls.forEach(id=>$(id).disabled=true);try{await fn();}catch(e){message(e.message,true);}finally{busy=false;controls.forEach(id=>$(id).disabled=false);$('save').disabled=!editorReady;$('extract').disabled=!editorReady;}}
+function load(data){model=data;result=null;mode='architecture';zoom=1;$('modelName').textContent=data.name;renderResult();message(data.warnings?.join(' ')||'Modelo cargado. Indica un punto dentro del aire y genera la envolvente acústica.');draw();}
+function renderResult(){
+ $('drawing').setAttribute('aria-pressed',String(mode==='editor'));
+ $('editor').hidden=mode!=='editor';canvas.hidden=mode==='editor';$('canvasLabels').hidden=mode==='editor';
+ $('architecture').setAttribute('aria-pressed',String(mode==='architecture'));
+ $('acoustic').setAttribute('aria-pressed',String(mode==='acoustic'));
+ $('acoustic').disabled=!result;
+ $('count').textContent=result?result.face_count:'—';$('area').textContent=result?`${result.surface_m2.toFixed(2)} m²`:'—';
+ $('volume').textContent=result?.valid?`${result.volume_m3.toFixed(2)} m³`:'—';
+ $('valid').textContent=!result?'Sin generar':result.valid?'Cerrada · revisar':'Requiere revisión';
+ $('valid').style.color=result?.valid?'#8bd5bf':'#eac28e';
+ const rows=$('faces');rows.replaceChildren();
+ if(!result){const row=rows.insertRow();const cell=row.insertCell();cell.colSpan=4;cell.textContent='Genera el modelo acústico para revisar sus caras.';return;}
+ for(const face of result.faces){const row=rows.insertRow();for(const value of [face.id,face.name,face.area.toFixed(3),face.normal.map(x=>x.toFixed(2)).join(', ')])row.insertCell().textContent=value;}
+}
+function seed(){return ['sx','sy','sz'].map(id=>Number($(id).value));}
+function bounds(){const points=model?.faces.flatMap(f=>f.outer)||[[0,0,0],[6,4,3]];const lo=[0,1,2].map(k=>points.reduce((v,p)=>Math.min(v,p[k]),Infinity)),hi=[0,1,2].map(k=>points.reduce((v,p)=>Math.max(v,p[k]),-Infinity));return {center:lo.map((v,k)=>(v+hi[k])/2),size:Math.max(...hi.map((v,k)=>v-lo[k]),1)};}
+function draw(){
+ if(mode==='editor')return;
+ const ratio=devicePixelRatio||1,w=canvas.clientWidth,h=canvas.clientHeight;
+ if(canvas.width!==w*ratio||canvas.height!==h*ratio){canvas.width=w*ratio;canvas.height=h*ratio;}
+ ctx.setTransform(ratio,0,0,ratio,0,0);ctx.clearRect(0,0,w,h);
+ const {center,size}=bounds(),scale=Math.min(w,h)*.68/size*zoom;
+ function camera(p){const x=p[0]-center[0],y=p[1]-center[1],z=p[2]-center[2];const u=Math.cos(yaw)*x-Math.sin(yaw)*y,v=Math.sin(yaw)*x+Math.cos(yaw)*y;return [u,Math.sin(pitch)*v-Math.cos(pitch)*z,Math.cos(pitch)*v+Math.sin(pitch)*z];}
+ function project(p){const q=camera(p);return [w/2+q[0]*scale,h/2+q[1]*scale,q[2]];}
+ // Z-up grid at floor height, independent of hidden surfaces.
+ ctx.strokeStyle='#2b4054';ctx.lineWidth=.6;
+ const extent=Math.max(8,Math.ceil(size)),step=Math.max(1,Math.ceil(extent/40));
+ for(let i=-extent;i<=extent;i+=step){for(const pts of [[[i,-extent,0],[i,extent,0]],[[-extent,i,0],[extent,i,0]]]){ctx.beginPath();pts.forEach((p,j)=>{const q=project(p);j?ctx.lineTo(q[0],q[1]):ctx.moveTo(q[0],q[1]);});ctx.stroke();}}
+ const acoustic=mode==='acoustic';let faces=(acoustic?result?.faces:model?.faces)||[];
+ // Display-only ceiling cut. Geometry and validation always retain it.
+ if($('roof').checked)faces=faces.filter(f=>!(Math.abs(f.normal[2])>.99&&f.centroid[2]>center[2]));
+ const projected=faces.map(f=>({f,loops:[f.outer,...f.holes].map(l=>l.map(project)),depth:camera(f.centroid)[2]})).sort((a,b)=>b.depth-a.depth);
+ for(const {f,loops} of projected){ctx.beginPath();for(const loop of loops){loop.forEach((p,j)=>j?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.closePath();}ctx.fillStyle=acoustic?'rgba(94,192,160,.38)':'rgba(112,144,170,.32)';ctx.fill('evenodd');ctx.strokeStyle=acoustic?'#81d9b8':'#9db1c3';ctx.lineWidth=acoustic?1.3:.8;ctx.stroke();}
+ const s=project(seed());ctx.beginPath();ctx.arc(s[0],s[1],5,0,Math.PI*2);ctx.fillStyle='#ffd08c';ctx.fill();ctx.strokeStyle='#39271a';ctx.stroke();
+ ctx.fillStyle='#abc0ce';ctx.font='11px Segoe UI';ctx.fillText('Z ↑ · unidades: metros',18,h-42);
+}
+async function syncModel(name){
+ const data=await editorCall('snapshot',{name:name||'Dibujo del editor'});data.faces=data.faces.map(prepare);data.surfaceOnly=$('surfaceOnly').checked;load(data);return data;
+}
+$('sync').onclick=()=>action(async()=>{await syncModel();message('Dibujo actualizado. Verifica el punto interior y genera el modelo acústico.');});
+$('demo').onclick=()=>action(async()=>{
+ const dims=Object.fromEntries(['length','width','height','thickness'].map(id=>[id,Number($(id).value)]));demoFaces(dims);
+ const state=await editorCall('ping');if((state.objects||state.sketches)&&!confirm('La sala de prueba reemplazará el dibujo del editor. Descarga antes el archivo HEW si quieres conservarlo. ¿Continuar?'))return;
+ const blank=await editorCall('blank');await editorCall('demo',{commands:roomCommands(dims),blank:Array.from(atob(blank.bytes),c=>c.charCodeAt(0))});
+ ['sx','sy','sz'].forEach((id,k)=>$(id).value=[dims.length/2,dims.width/2,dims.height/2][k]);
+ await syncModel('Sala de prueba · muros con espesor');mode='editor';renderResult();message('Sala creada en el editor. Puedes modificarla o generar su modelo acústico.');
+});
+$('file').onchange=event=>action(async()=>{
+ const file=event.target.files[0];if(!file)return;if(file.size>32*1024*1024)throw Error('Esta versión admite archivos de hasta 32 MB.');
+ message('Importando el archivo dentro del editor…');
+ if(file.name.toLowerCase().endsWith('.dxf')){
+  const data=parseDxf(await file.text(),$('dxfUnits').value||undefined);await editorCall('commands',{commands:data.commands,label:'Importar plano DXF'});model=null;result=null;mode='editor';renderResult();
+  const missing=Object.entries(data.unsupported).map(([type,count])=>`${type}: ${count}`).join(', ');
+  message(`Plano DXF incorporado: ${data.count} líneas/polilíneas. Es una referencia 2D: dibuja y extruye el recinto antes de extraer caras.${missing?' Entidades no importadas: '+missing:''}`);
+ }else{
+  const bytes=encodeBytes(new Uint8Array(await file.arrayBuffer()));
+  if(file.name.toLowerCase().endsWith('.hew')){
+   const state=await editorCall('ping');if((state.objects||state.sketches)&&!confirm('Abrir este HEW reemplaza el dibujo actual. ¿Continuar?'))return;
+   await editorCall('load',{bytes});
+  }else await editorCall('import',{name:file.name,bytes,units:$('dxfUnits').value||'m'});
+  await syncModel(file.name);const {center}=bounds();['sx','sy','sz'].forEach((id,k)=>$(id).value=center[k].toFixed(3));mode='editor';renderResult();
+  message('Modelo importado al editor. Verifica unidades y sitúa el punto dentro del aire de la sala.');
+ }
+});
+$('extract').onclick=()=>action(async()=>{
+ message('Leyendo el dibujo actual y comprobando el recinto…');await syncModel(model?.name);result=await compute('extract',{faces:model.faces.map(f=>$('surfaceOnly').checked?{...f,is_solid:false}:f),seed:seed()});mode='acoustic';renderResult();draw();
+ message(result.valid?`Envolvente cerrada: ${result.face_count} caras. El dibujo original se conserva. Verifica la selección antes del cálculo.`:result.errors.join(' '),!result.valid);persist();
+});
+for(const view of ['drawing','architecture','acoustic'])$(view).onclick=()=>{mode=view==='drawing'?'editor':view;renderResult();draw();};
+$('roof').onchange=draw;$('fit').onclick=()=>{zoom=1;yaw=-.8;pitch=.55;draw();};
+for(const id of ['sx','sy','sz','surfaceOnly'])$(id).oninput=()=>{if(result){result=null;mode='architecture';renderResult();message('Cambió el punto interior. Genera nuevamente el modelo acústico.');}draw();};
+$('save').onclick=()=>action(async()=>{await syncModel(model?.name);download(new Blob([JSON.stringify({format:'revera',version:2,model,seed:seed()},null,2)],{type:'application/json'}),'proyecto.revera');persist();message('Proyecto descargado con el dibujo actual del editor.');});
+async function restoreProject(data){
+ if(data.format!=='revera'||![1,2].includes(data.version)||!Array.isArray(data.model?.faces)||!Array.isArray(data.seed)||data.seed.length!==3)throw Error('Proyecto REVERA inválido.');
+ if(data.model.faces.length>5000)throw Error('El proyecto supera el límite de 5.000 caras.');
+ const checked=await compute('validate',{faces:data.model.faces,seed:data.seed});
+ if(data.model.editor_bytes){const state=await editorCall('ping');if((state.objects||state.sketches)&&!confirm('Recuperar el proyecto reemplaza el dibujo actual. ¿Continuar?'))return;await editorCall('load',{bytes:data.model.editor_bytes});}
+ $('surfaceOnly').checked=!!data.model.surfaceOnly;load({...data.model,faces:checked.faces});['sx','sy','sz'].forEach((id,k)=>$(id).value=data.seed[k]);renderResult();draw();message(data.model.editor_bytes?'Proyecto y dibujo recuperados. Genera la envolvente para validar nuevamente.':'Proyecto del prototipo anterior: geometría recuperada para consulta; importa el HEW original para seguir dibujando.');
+}
+$('project').onchange=event=>action(async()=>{const file=event.target.files[0];if(file.size>48*1024*1024)throw Error('Proyecto demasiado grande.');await restoreProject(JSON.parse(await file.text()));});
+$('saveHew').onclick=()=>action(async()=>{const {bytes}=await editorCall('save');download(new Blob([Uint8Array.from(atob(bytes),c=>c.charCodeAt(0))],{type:'application/octet-stream'}),'modelo.hew');message('Dibujo HEW descargado.');});
+function download(blob,name){const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+function persist(){try{localStorage.setItem('revera-project-v2',JSON.stringify({format:'revera',version:2,model,seed:seed()}));$('localStatus').textContent='Última extracción guardada en este navegador';}catch{$('localStatus').textContent='Descarga el proyecto para conservarlo: espacio local insuficiente';}}
+$('restoreLocal').onclick=()=>action(async()=>{const data=localStorage.getItem('revera-project-v2');if(!data)throw Error('Todavía no hay un proyecto guardado en este navegador.');await restoreProject(JSON.parse(data));});
+canvas.onpointerdown=e=>{drag={x:e.clientX,y:e.clientY};canvas.setPointerCapture(e.pointerId);};
+canvas.onpointermove=e=>{if(!drag)return;yaw-=(e.clientX-drag.x)*.008;pitch=Math.max(-1.4,Math.min(1.4,pitch+(e.clientY-drag.y)*.008));drag={x:e.clientX,y:e.clientY};draw();};
+canvas.onpointerup=canvas.onpointercancel=()=>drag=null;
+canvas.addEventListener('wheel',e=>{e.preventDefault();zoom=Math.max(.2,Math.min(5,zoom*Math.exp(-e.deltaY*.001)));draw();},{passive:false});
+new ResizeObserver(draw).observe(canvas);
+window.addEventListener('revera-editor-ready',async event=>{
+ if(!editorReady){editorReady=true;$('status').textContent='Editor 3D conectado · procesamiento en tu navegador';$('extract').disabled=false;$('save').disabled=false;}
+ const hash=event.detail?.hash;if(hash&&lastEditorHash&&hash!==lastEditorHash&&result){result=null;mode=mode==='acoustic'?'editor':mode;renderResult();message('Cambió el dibujo. Genera nuevamente el modelo acústico para actualizar sus resultados.');}
+ if(hash)lastEditorHash=hash;
+});
+try{if(localStorage.getItem('revera-project-v2'))$('localStatus').textContent='Hay un proyecto anterior disponible para recuperar';}catch{}
+renderResult();message('Dibuja con el editor, importa un archivo o crea una sala de prueba. Después genera su envolvente acústica.');

@@ -1,0 +1,1 @@
+import{l as e}from"./index-DT6dccOZ.js";var t=class{async write(t,n){let{invoke:r}=await e(async()=>{let{invoke:e}=await import(`./core-CYtF6UP-.js`);return{invoke:e}},[]);return await r(`reproducer_write`,{name:t,contents:n})}};export{t as TauriReproducerStore};

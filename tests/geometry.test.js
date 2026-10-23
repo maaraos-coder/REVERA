@@ -1,0 +1,10 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {demoFaces,extract,prepare} from '../src/geometry.js';
+test('thick architecture produces six inward faces and 72 m³ of air',()=>{const raw=demoFaces(),copy=JSON.stringify(raw),r=extract(raw,[3,2,1.5]);assert.equal(r.valid,true);assert.equal(r.face_count,6);assert.equal(r.volume_m3,72);assert.equal(r.surface_m2,108);assert.equal(JSON.stringify(raw),copy);});
+test('missing ceiling cannot yield a valid volume',()=>{const r=extract(demoFaces().filter(f=>f.object!=='Techo'),[3,2,1.5]);assert.equal(r.valid,false);assert.equal(r.volume_m3,null);});
+test('a point outside the room is rejected',()=>{assert.equal(extract(demoFaces(),[20,20,1]).valid,false);});
+test('a point inside the wall is rejected',()=>{assert.throws(()=>extract(demoFaces(),[-.1,2,1.5]),/sólido/);});
+test('a point on a boundary is rejected',()=>{assert.throws(()=>extract(demoFaces(),[0,2,1.5]),/superficie/);});
+test('translated room has unchanged area and volume',()=>{const faces=demoFaces({length:8,width:5,height:2.5,thickness:.35}).map((f,i)=>prepare({...f,outer:f.outer.map(p=>[p[0]+100,p[1]-70,p[2]+12])},i));const r=extract(faces,[104,-67.5,13]);assert.equal(r.valid,true);assert.ok(Math.abs(r.volume_m3-100)<1e-8);});
+test('open window is preserved and prevents closed-envelope validation',()=>{const faces=demoFaces();const wall=faces.find(f=>f.object==='Muro sur'&&f.outer.every(p=>Math.abs(p[1])<1e-8));wall.holes=[[[2,0,1],[3,0,1],[3,0,2],[2,0,2]]];const r=extract(faces,[3,2,1.5]);assert.equal(r.valid,false);assert.equal(r.volume_m3,null);});
+test('invalid coordinates cannot enter the worker',()=>{assert.throws(()=>extract(demoFaces(),[NaN,2,1.5]),/inválido/);});
