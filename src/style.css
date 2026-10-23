@@ -37,3 +37,6 @@ body.focus-mode main{grid-template-columns:minmax(0,1fr)}
 :root{--header:48px}.brand img{width:176px;height:45px}.app-header{gap:14px}.app-header .header-divider{height:25px}@media(max-width:800px){:root{--header:46px}.brand img{width:154px;height:40px}.app-header{gap:9px}}
 
 .toolbar{height:auto;min-height:36px;flex-wrap:wrap;padding:3px 0;row-gap:5px}.view-actions{flex-wrap:wrap;justify-content:flex-end;margin-left:auto}#eraseFaces[aria-pressed=true]{background:#544134;color:#ffdcc2;border-color:#b68b6b}.view-actions button{white-space:nowrap}.face-panel{top:50px;max-height:calc(100% - 115px)}@media(max-width:1100px){.face-panel{top:84px}}
+
+/* Surface details stay compact; the drawing remains the main workspace. */
+.results-panel{max-height:min(26vh,220px)!important;overflow-y:auto;overscroll-behavior:contain;padding:10px 14px;scrollbar-width:thin}.results-panel .table-wrap{overflow:visible;margin-top:6px}.results-panel th,.results-panel td{padding:6px 9px}.results-panel .surface-head{position:sticky;top:-10px;background:#101e2c;z-index:1;padding:5px 0}.results-panel h2{margin-bottom:2px}#absorptionSummary{margin:5px 0}#absorptionSummary p{margin:5px 0}@media(max-width:800px){.results-panel{max-height:25vh!important}}

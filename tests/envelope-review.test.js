@@ -7,3 +7,5 @@ test('all F blocks volume until explicit orientation correction',()=>{const face
 test('one inverted face and an explicitly inverted D face block calculation',()=>{const faces=room();faces[2]=reverse(faces[2]);assert.equal(reviewEnvelope(faces).outside_count,1);assert.equal(reviewEnvelope(room(),{flipped:[faceKey(room()[0])]}).valid,false);});
 test('all D is insufficient: openings and duplicate faces invalidate closure',()=>{assert.equal(reviewEnvelope(room().slice(1)).valid,false);assert.equal(reviewEnvelope([...room(),room()[0]]).valid,false);});
 test('thick architectural walls can extract their interior without user coordinates',()=>{const r=reviewEnvelope(demoFaces(),{thick:true});assert.equal(r.valid,true);assert.equal(r.face_count,6);assert.equal(r.volume_m3,72);});
+
+test('outward faces report orientation without obsolete point or false concavity errors',()=>{const r=reviewEnvelope(room().map(reverse));assert.ok(r.errors.some(e=>e.includes('Orientar caras')));assert.ok(r.errors.every(e=>!e.includes('punto')&&!e.includes('concavidad')));assert.equal(r.volume_m3,null);});

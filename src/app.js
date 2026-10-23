@@ -94,7 +94,7 @@ async function reviewRoom(orient=false){
  result=await compute('review',{faces:model.faces,options:{thick:$('thickModel').checked,flipped:[...orientationOverrides],orient}});
  if(result.orientation_valid)assignFaceDefaults(result.faces,faceProperties);
  for(const key of result.reversed_keys){if(orientationOverrides.has(key))orientationOverrides.delete(key);else orientationOverrides.add(key);}
- reviewedHash=lastEditorHash;calculated=false;mode='acoustic';renderResult();draw();setResults(true);
+ reviewedHash=lastEditorHash;calculated=false;mode='acoustic';renderResult();draw();setResults(false);
  message(result.valid?'Recinto validado: caras D y envolvente cerrada. Pulsa Calcular recinto validado.':result.errors.join(' '),!result.valid);persist();
 }
 $('extract').onclick=()=>action(()=>reviewRoom());
