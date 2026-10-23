@@ -25,9 +25,9 @@ function brandEditor(root){
  "Default":"Predeterminado","Opacity":"Opacidad","Add color":"Añadir color","+ Add color":"+ Añadir color","Add texture":"Añadir textura","Save to Library":"Guardar en biblioteca","Choose color":"Elegir color","Name…":"Nombre…","Name...":"Nombre…","Filter materials…":"Filtrar materiales…","Filter materials...":"Filtrar materiales…","Filter outliner…":"Filtrar estructura…","Filter outliner...":"Filtrar estructura…",
  "No component definitions in this document.":"Este documento no contiene componentes.",
  "No Scenes yet. Add Scene saves the current camera, visibility, and section cut.":"Aún no hay escenas. Añadir escena guarda la cámara, la visibilidad y el corte actuales.",
- "Add Scene":"Añadir escena",
+ "Add Scene":"Añadir escena","Choose color…":"Elegir color…","Choose color...":"Elegir color…","Purge Unused…":"Eliminar elementos sin uso…","Purge Unused...":"Eliminar elementos sin uso…","Filter materials":"Filtrar materiales","Name":"Nombre","Texture":"Textura","Cancel":"Cancelar","Apply":"Aplicar","Model":"Modelo",
  "Paint":"Pintar","Select":"Seleccionar","Push/Pull":"Empujar/tirar","Line":"Línea","Rectangle":"Rectángulo","Circle":"Círculo","Move":"Mover"
- }))text=text===en?es:text.replaceAll(en.length>25?en:'\u0000',es);return text;};
+ }))text=text.trim()===en?text.replace(en,es):text.replaceAll(en.length>25?en:'\u0000',es);return text.replace(/^Opacity(?=\s|$)/,'Opacidad').replace(/(\d+) objects?\b/g,'$1 objetos').replace(/\bsolid\b/g,'sólido');};
  const walk=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);
  while(walk.nextNode()){const node=walk.currentNode;if(node.parentElement?.closest('script,style,textarea,input,[contenteditable]'))continue;const next=rename(node.nodeValue);if(next!==node.nodeValue)node.nodeValue=next;}
  for(const element of root.querySelectorAll?.('[title],[aria-label],[alt],[placeholder]')||[]){for(const attr of ['title','aria-label','alt','placeholder']){const value=element.getAttribute(attr);if(value){const next=attr==='aria-label'?value.replace(/\bHew\b|\bHEW\b/g,'REVERA'):rename(value);if(next!==value)element.setAttribute(attr,next);}}}
