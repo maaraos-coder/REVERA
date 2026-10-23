@@ -8,7 +8,7 @@ export function localizeLabels(source,messages){
  // Observe the actual active tool: rail, dock, keyboard and menu all reach it.
  const paletteAnchor='[xn]),[jn,Mn]=(0,d.useState)([])';
  if(source.includes('case`tool-paint`')&&source.split(paletteAnchor).length!==2)throw Error('Cambió la integración de materiales del editor.');
- source=source.replace(paletteAnchor,'[xn]),_reveraPaint=(0,d.useEffect)(()=>{if(E===`Paint`){Dn(()=>we(true),`Materials`);Se(false);Ee(false);Oe(false);Ae(false);Me(false);Je(false);P([])}},[E,Dn]),_reveraSelection=(0,d.useEffect)(()=>{window.reveraClearSelection=()=>P([]);return()=>{delete window.reveraClearSelection}},[]),[jn,Mn]=(0,d.useState)([])');
+ source=source.replace(paletteAnchor,'[xn]),_reveraPaint=(0,d.useEffect)(()=>{if(E===`Paint`){Dn(()=>we(true),`Materials`);Se(false);Ee(false);Oe(false);Ae(false);Me(false);Je(false);P([])}},[E,Dn]),_reveraSelection=(0,d.useEffect)(()=>{window.reveraClearSelection=()=>P([]);window.reveraActivateTool=name=>A(name);return()=>{delete window.reveraClearSelection;delete window.reveraActivateTool}},[]),[jn,Mn]=(0,d.useState)([])');
  // The upstream dock resolves icons by its English label. Keep that lookup
  // independent of translated display text (the command id never changes).
  source=source.replace('var zB=[{id:`tool-rectangle`','var zB=[{id:`revera-erase-face`,label:`Borrar caras`},{id:`tool-rectangle`');
