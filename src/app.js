@@ -110,3 +110,15 @@ window.addEventListener('revera-editor-ready',async event=>{
 });
 try{if(localStorage.getItem('revera-project-v2'))$('localStatus').textContent='Hay un proyecto anterior disponible para recuperar';}catch{}
 renderResult();message('Dibuja con el editor, importa un archivo o crea una sala de prueba. Después genera su envolvente acústica.');
+
+// Drawing-first workspace: layout controls never reload the editor iframe.
+const panelToggle=$('panelToggle'),focusToggle=$('focusToggle');
+function setPanelHidden(hidden){document.body.classList.toggle('panel-hidden',hidden);panelToggle.setAttribute('aria-expanded',String(!hidden));panelToggle.title=hidden?'Mostrar panel del proyecto':'Ocultar panel del proyecto';}
+setPanelHidden(window.matchMedia('(max-width: 800px)').matches);
+panelToggle.onclick=()=>{if(document.body.classList.contains('focus-mode')){setFocus(false);setPanelHidden(false);return;}setPanelHidden(!document.body.classList.contains('panel-hidden'));};
+function setFocus(on){document.body.classList.toggle('focus-mode',on);focusToggle.setAttribute('aria-pressed',String(on));focusToggle.textContent=on?'↙ Salir del modo dibujo':'⛶ Modo dibujo';panelToggle.setAttribute('aria-expanded',String(!on&&!document.body.classList.contains('panel-hidden')));requestAnimationFrame(draw);}
+focusToggle.onclick=()=>setFocus(!document.body.classList.contains('focus-mode'));
+window.addEventListener('keydown',e=>{if(e.key==='Escape'&&document.body.classList.contains('focus-mode'))setFocus(false);});
+function setResults(open){$('resultsPanel').hidden=!open;$('resultsToggle').setAttribute('aria-expanded',String(open));$('resultsToggle').textContent=open?'Ocultar superficies ↓':'Ver superficies ↑';}
+$('resultsToggle').onclick=()=>setResults($('resultsPanel').hidden);
+$('resultsClose').onclick=()=>setResults(false);

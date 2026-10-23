@@ -2,7 +2,7 @@
  * This bridge is part of the modified editor, not a proprietary plugin.
  * Only a same-origin parent window can access the embedded model.
  */
-try{localStorage.setItem('hew.settings.showWelcome','false');}catch{}
+try{localStorage.setItem('hew.settings.showWelcome','false');if(localStorage.getItem('revera.workspace-layout')!=='1'){localStorage.setItem('hew.railNarrow','1');localStorage.setItem('revera.workspace-layout','1');}}catch{}
 window.reveraInstall=(deps,createScene)=>{
  let last=null,connection=null,busy=false;
  function rpc(scene,method,params={}){
