@@ -20,7 +20,7 @@ for(const file of walk(editor)){
   text=text.replace(selectionAnchor,'clearObjectHighlight:()=>{N.setSelected([]);N.setSelectedInstances([]);N.setSelectedInstanceMembers(null,[]);},'+selectionAnchor);
   text=text.replace('!Q9&&!$9&&!Xn&&`serviceWorker`in navigator?','false&&`serviceWorker`in navigator?');
  }
- if(path.basename(file)==='index.html')text=text.replace('</head>','<script src="/editor/revera-bridge.js"></script></head>');
+ if(path.basename(file)==='index.html')text=text.replace(/<link\b[^>]*rel=["'](?:icon|apple-touch-icon)["'][^>]*>/gi,'').replace('</head>','<link rel="icon" type="image/svg+xml" href="/favicon.svg?v=1"></head>').replace('</head>','<script src="/editor/revera-bridge.js"></script></head>');
  fs.writeFileSync(file,text);
 }
 fs.copyFileSync(path.join(root,'src','editor-bridge.js'),path.join(editor,'revera-bridge.js'));
