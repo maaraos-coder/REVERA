@@ -1,3 +1,4 @@
+import {assignFaceDefaults} from './face-defaults.js';
 import {acousticSummary} from './acoustic-summary.js';
 import {faceKey,bands,absorption} from './face-selection.js';
 import {demoFaces,prepare} from './geometry.js';
@@ -35,7 +36,7 @@ function renderResult(){
  $('valid').style.color=result?.valid?'#8bd5bf':'#eac28e';
  const rows=$('faces');rows.replaceChildren();
  if(!result){const row=rows.insertRow();const cell=row.insertCell();cell.colSpan=4;cell.textContent='Genera el modelo acústico para revisar sus caras.';return;}
- for(const face of result.faces){const row=rows.insertRow();for(const value of [face.id,face.name,face.area.toFixed(3),`${face.orientation||'—'} · ${face.normal.map(x=>x.toFixed(2)).join(', ')}`])row.insertCell().textContent=value;row.tabIndex=0;row.onclick=()=>{mode='acoustic';renderResult();selectFace(face);draw();};row.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();row.onclick();}};}
+ for(const face of result.faces){const row=rows.insertRow();for(const value of [face.id,faceProperties[faceKey(face)]?.name||face.name,face.area.toFixed(3),`${face.orientation||'—'} · ${face.normal.map(x=>x.toFixed(2)).join(', ')}`])row.insertCell().textContent=value;row.tabIndex=0;row.onclick=()=>{mode='acoustic';renderResult();selectFace(face);draw();};row.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();row.onclick();}};}
 }
 function seed(){return ['sx','sy','sz'].map(id=>Number($(id).value));}
 function bounds(){const points=model?.faces.flatMap(f=>f.outer)||[[0,0,0],[6,4,3]];const lo=[0,1,2].map(k=>points.reduce((v,p)=>Math.min(v,p[k]),Infinity)),hi=[0,1,2].map(k=>points.reduce((v,p)=>Math.max(v,p[k]),-Infinity));return {center:lo.map((v,k)=>(v+hi[k])/2),size:Math.max(...hi.map((v,k)=>v-lo[k]),1)};}
@@ -56,7 +57,7 @@ function draw(){
  if($('roof').checked)faces=faces.filter(f=>!(Math.abs(f.normal[2])>.99&&f.centroid[2]>center[2]));
  const projected=faces.map(f=>({f,loops:[f.outer,...f.holes].map(l=>l.map(project)),depth:camera(f.centroid)[2]})).sort((a,b)=>b.depth-a.depth);
  projectedFaces=projected;
- for(const {f,loops} of projected){const selected=selectedFace&&faceKey(f)===faceKey(selectedFace);ctx.beginPath();for(const loop of loops){loop.forEach((p,j)=>j?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.closePath();}ctx.fillStyle=selected?'rgba(70,240,191,.65)':acoustic?(f.orientation==='F'?'rgba(230,115,85,.55)':'rgba(94,192,160,.38)'):'rgba(112,144,170,.32)';ctx.fill('evenodd');ctx.strokeStyle=selected?'#d4fff1':acoustic?'#81d9b8':'#9db1c3';ctx.lineWidth=acoustic?1.3:.8;ctx.stroke();if(acoustic&&f.orientation){const p=project(f.centroid);ctx.fillStyle=f.orientation==='D'?'#b8ffe3':'#ffb09a';ctx.font='bold 13px Segoe UI';ctx.fillText(`${f.id} · ${f.orientation}`,p[0],p[1]);}}
+ for(const {f,loops} of projected){const selected=selectedFace&&faceKey(f)===faceKey(selectedFace);ctx.beginPath();for(const loop of loops){loop.forEach((p,j)=>j?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.closePath();}ctx.fillStyle=selected?'rgba(70,240,191,.65)':acoustic?(f.orientation==='F'?'rgba(230,115,85,.55)':'rgba(94,192,160,.38)'):'rgba(112,144,170,.32)';ctx.fill('evenodd');ctx.strokeStyle=selected?'#d4fff1':acoustic?'#81d9b8':'#9db1c3';ctx.lineWidth=acoustic?1.3:.8;ctx.stroke();if(acoustic&&f.orientation){const p=project(f.centroid);ctx.fillStyle=f.orientation==='D'?'#b8ffe3':'#ffb09a';ctx.font='bold 13px Segoe UI';ctx.fillText(`${faceProperties[faceKey(f)]?.name||f.id} · ${f.orientation}`,p[0],p[1]);}}
 
  ctx.fillStyle='#abc0ce';ctx.font='11px Segoe UI';ctx.fillText('Z ↑ · unidades: metros',18,h-42);
 }
@@ -91,6 +92,7 @@ $('file').onchange=event=>action(async()=>{
 async function reviewRoom(orient=false){
  message('Revisando orientación D/F y cierre de la envolvente…');await syncModel(model?.name);
  result=await compute('review',{faces:model.faces,options:{thick:$('thickModel').checked,flipped:[...orientationOverrides],orient}});
+ if(result.orientation_valid)assignFaceDefaults(result.faces,faceProperties);
  for(const key of result.reversed_keys){if(orientationOverrides.has(key))orientationOverrides.delete(key);else orientationOverrides.add(key);}
  reviewedHash=lastEditorHash;calculated=false;mode='acoustic';renderResult();draw();setResults(true);
  message(result.valid?'Recinto validado: caras D y envolvente cerrada. Pulsa Calcular recinto validado.':result.errors.join(' '),!result.valid);persist();
@@ -142,10 +144,10 @@ $('resultsToggle').onclick=()=>setResults($('resultsPanel').hidden);
 $('resultsClose').onclick=()=>setResults(false);
 
 function clearFace(){$('invertAcousticFace').hidden=true;selectedFace=null;$('facePanel').hidden=true;}
-function selectFace(face){$('invertAcousticFace').hidden=!face?.orientation;selectedFace=face;$('facePanel').hidden=!face;if(!face)return;const data=faceProperties[faceKey(face)]||{};$('faceGeometry').textContent=`${face.id} · ${face.area.toFixed(3)} m² · ${face.orientation?'Orientación '+face.orientation+' · ':''}Normal: ${face.normal.map(v=>v.toFixed(2)).join(', ')}`;$('faceName').value=data.name||face.name||face.id;$('faceMaterial').value=data.material||'';bands.forEach((band,i)=>$('alpha'+band).value=data.alpha?.[i]??'');for(const row of $('faces').rows)row.setAttribute('aria-selected',String(row.cells[0]?.textContent===face.id));}
+function selectFace(face){$('invertAcousticFace').hidden=!face?.orientation;selectedFace=face;$('facePanel').hidden=!face;if(!face)return;const data=faceProperties[faceKey(face)]||{};$('faceGeometry').textContent=`${face.id} · ${face.area.toFixed(3)} m² · ${face.orientation?'Orientación '+face.orientation+' · ':''}Normal: ${face.normal.map(v=>v.toFixed(2)).join(', ')}`;$('faceName').value=data.name||face.name||face.id;$('faceMaterial').value=data.material||'';$('alphaNotice').textContent=data.provisional?'α = 0,05 provisional en todas las bandas. Selecciona o introduce el material real antes de usar los resultados.':'Coeficientes guardados por el usuario.';bands.forEach((band,i)=>$('alpha'+band).value=data.alpha?.[i]??'');for(const row of $('faces').rows)row.setAttribute('aria-selected',String(row.cells[0]?.textContent===face.id));}
 for(const band of bands){const label=document.createElement('label');label.textContent=band+' Hz';const input=document.createElement('input');input.id='alpha'+band;input.type='number';input.min=0;input.max=1;input.step=.01;input.placeholder='—';input.required=true;label.append(input);$('absorptionInputs').append(label);}
 $('faceClose').onclick=()=>{clearFace();draw();if(faceSelection)editorCall('face-mode',{enabled:true,faces:model?.faces||[]}).catch(()=>{});};
-$('faceForm').onsubmit=e=>{e.preventDefault();if(!selectedFace)return;try{const alpha=absorption(bands.map(b=>Number($('alpha'+b).value)));faceProperties[faceKey(selectedFace)]={name:$('faceName').value.trim(),material:$('faceMaterial').value.trim(),alpha};persist();renderAbsorption();message('Propiedades guardadas para esta cara. Descarga el proyecto REVERA para conservarlas con el dibujo.');}catch(error){message(error.message,true);}};
+$('faceForm').onsubmit=e=>{e.preventDefault();if(!selectedFace)return;try{const alpha=absorption(bands.map(b=>Number($('alpha'+b).value)));faceProperties[faceKey(selectedFace)]={name:$('faceName').value.trim(),material:$('faceMaterial').value.trim(),alpha,provisional:false};persist();renderAbsorption();renderResult();draw();message('Propiedades guardadas para esta cara. Descarga el proyecto REVERA para conservarlas con el dibujo.');}catch(error){message(error.message,true);}};
 $('faceMode').onclick=()=>action(async()=>{if(eraseSelection){await editorCall('erase-mode',{enabled:false});setEraseState(false);}if(faceSelection){await editorCall('face-mode',{enabled:false});faceSelection=false;}else{message('Preparando selección de superficies…');const data=await syncModel(model?.name);await editorCall('face-mode',{enabled:true,faces:data.faces});faceSelection=true;mode='editor';renderResult();message('Haz clic en una cara para consultar su área y editar sus propiedades acústicas. Para modificar el dibujo, vuelve a Seleccionar y pulsa Supr sobre la cara elegida.');}clearFace();$('faceMode').setAttribute('aria-pressed',String(faceSelection));});
 window.addEventListener('revera-face',e=>selectFace(e.detail));
 window.addEventListener('revera-face-stale',()=>{clearFace();message('Cambió el dibujo. Desactiva y vuelve a activar Propiedades de cara para actualizarlo.',true);});
@@ -194,7 +196,7 @@ function renderAbsorption(){
  const summary=acousticSummary(calculated?result:null,faceProperties),host=$('absorptionSummary');host.replaceChildren();
  $('assignedArea').textContent=summary?`${summary.assignedArea.toFixed(2)} m²`:'—';
  if(!summary){host.textContent='Valida un recinto cerrado para calcular la absorción.';return;}
- const note=document.createElement('p');note.textContent=`Absorción equivalente A = Σ(S × α). ${summary.complete?'Todas las caras tienen coeficientes.':`Resultado parcial: faltan coeficientes en ${summary.missingArea.toFixed(2)} m².`} Los colores del dibujo no asignan absorción.`;host.append(note);
+ const note=document.createElement('p');note.textContent=`Absorción equivalente A = Σ(S × α). ${summary.complete?'Todas las caras tienen coeficientes.':`Resultado parcial: faltan coeficientes en ${summary.missingArea.toFixed(2)} m².`} ${summary.provisionalCount?`${summary.provisionalCount} caras usan α provisional = 0,05; reemplázalo por datos del material real.`:''} Los colores del dibujo no asignan absorción.`;host.append(note);
  const table=document.createElement('table'),head=table.createTHead().insertRow();['Banda · Hz',...summary.bands].forEach(v=>{const th=document.createElement('th');th.textContent=v;head.append(th);});const row=table.createTBody().insertRow();['A · m² equivalentes'+(summary.complete?'':' (parcial)'),...summary.equivalent.map(v=>v.toFixed(2))].forEach(v=>row.insertCell().textContent=v);host.append(table);
  const details=document.createElement('p');details.textContent=summary.faces.map(f=>`${f.id}: ${f.area.toFixed(2)} m² · ${f.material}${f.alpha?'':' · α pendiente'}`).join(' | ');host.append(details);
 }
