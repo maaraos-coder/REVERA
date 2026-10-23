@@ -59,7 +59,7 @@ async function syncModel(name){
 $('sync').onclick=()=>action(async()=>{await syncModel();message('Dibujo actualizado. Verifica el punto interior y genera el modelo acústico.');});
 $('demo').onclick=()=>action(async()=>{
  const dims=Object.fromEntries(['length','width','height','thickness'].map(id=>[id,Number($(id).value)]));demoFaces(dims);
- const state=await editorCall('ping');if((state.objects||state.sketches)&&!confirm('La sala de prueba reemplazará el dibujo del editor. Descarga antes el archivo HEW si quieres conservarlo. ¿Continuar?'))return;
+ const state=await editorCall('ping');if((state.objects||state.sketches)&&!confirm('La sala de prueba reemplazará el dibujo del editor. Descarga antes el dibujo editable si quieres conservarlo. ¿Continuar?'))return;
  const blank=await editorCall('blank');await editorCall('demo',{commands:roomCommands(dims),blank:Array.from(atob(blank.bytes),c=>c.charCodeAt(0))});
  ['sx','sy','sz'].forEach((id,k)=>$(id).value=[dims.length/2,dims.width/2,dims.height/2][k]);
  await syncModel('Sala de prueba · muros con espesor');mode='editor';renderResult();message('Sala creada en el editor. Puedes modificarla o generar su modelo acústico.');
@@ -74,7 +74,7 @@ $('file').onchange=event=>action(async()=>{
  }else{
   const bytes=encodeBytes(new Uint8Array(await file.arrayBuffer()));
   if(file.name.toLowerCase().endsWith('.hew')){
-   const state=await editorCall('ping');if((state.objects||state.sketches)&&!confirm('Abrir este HEW reemplaza el dibujo actual. ¿Continuar?'))return;
+   const state=await editorCall('ping');if((state.objects||state.sketches)&&!confirm('Abrir este dibujo reemplaza el dibujo actual. ¿Continuar?'))return;
    await editorCall('load',{bytes});
   }else await editorCall('import',{name:file.name,bytes,units:$('dxfUnits').value||'m'});
   await syncModel(file.name);const {center}=bounds();['sx','sy','sz'].forEach((id,k)=>$(id).value=center[k].toFixed(3));mode='editor';renderResult();
@@ -94,10 +94,10 @@ async function restoreProject(data){
  if(data.model.faces.length>5000)throw Error('El proyecto supera el límite de 5.000 caras.');
  const checked=await compute('validate',{faces:data.model.faces,seed:data.seed});
  if(data.model.editor_bytes){const state=await editorCall('ping');if((state.objects||state.sketches)&&!confirm('Recuperar el proyecto reemplaza el dibujo actual. ¿Continuar?'))return;await editorCall('load',{bytes:data.model.editor_bytes});}
- faceProperties=data.faceProperties&&typeof data.faceProperties==='object'?data.faceProperties:{};$('surfaceOnly').checked=!!data.model.surfaceOnly;load({...data.model,faces:checked.faces});['sx','sy','sz'].forEach((id,k)=>$(id).value=data.seed[k]);renderResult();draw();message(data.model.editor_bytes?'Proyecto y dibujo recuperados. Genera la envolvente para validar nuevamente.':'Proyecto del prototipo anterior: geometría recuperada para consulta; importa el HEW original para seguir dibujando.');
+ faceProperties=data.faceProperties&&typeof data.faceProperties==='object'?data.faceProperties:{};$('surfaceOnly').checked=!!data.model.surfaceOnly;load({...data.model,faces:checked.faces});['sx','sy','sz'].forEach((id,k)=>$(id).value=data.seed[k]);renderResult();draw();message(data.model.editor_bytes?'Proyecto y dibujo recuperados. Genera la envolvente para validar nuevamente.':'Proyecto del prototipo anterior: geometría recuperada para consulta; importa el dibujo editable original para seguir dibujando.');
 }
 $('project').onchange=event=>action(async()=>{const file=event.target.files[0];if(file.size>48*1024*1024)throw Error('Proyecto demasiado grande.');await restoreProject(JSON.parse(await file.text()));});
-$('saveHew').onclick=()=>action(async()=>{const {bytes}=await editorCall('save');download(new Blob([Uint8Array.from(atob(bytes),c=>c.charCodeAt(0))],{type:'application/octet-stream'}),'modelo.hew');message('Dibujo HEW descargado.');});
+$('saveHew').onclick=()=>action(async()=>{const {bytes}=await editorCall('save');download(new Blob([Uint8Array.from(atob(bytes),c=>c.charCodeAt(0))],{type:'application/octet-stream'}),'modelo.hew');message('Dibujo editable descargado.');});
 function download(blob,name){const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
 function persist(){try{localStorage.setItem('revera-project-v2',JSON.stringify({format:'revera',version:2,model,faceProperties,seed:seed()}));$('localStatus').textContent='Última extracción guardada en este navegador';}catch{$('localStatus').textContent='Descarga el proyecto para conservarlo: espacio local insuficiente';}}
 $('restoreLocal').onclick=()=>action(async()=>{const data=localStorage.getItem('revera-project-v2');if(!data)throw Error('Todavía no hay un proyecto guardado en este navegador.');await restoreProject(JSON.parse(data));});

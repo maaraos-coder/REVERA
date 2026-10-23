@@ -3,7 +3,17 @@
  * Only a same-origin parent window can access the embedded model.
  */
 try{localStorage.setItem('hew.settings.showWelcome','false');if(localStorage.getItem('revera.workspace-layout')!=='1'){localStorage.setItem('hew.railNarrow','1');localStorage.setItem('revera.workspace-layout','1');}}catch{}
+// Presentation branding only: original source and legal notices remain available in Acerca de.
+function brandEditor(root){
+ const rename=text=>text.replace(/\bHew\b|\bHEW\b/g,'REVERA');
+ const walk=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);
+ while(walk.nextNode()){const node=walk.currentNode;if(node.parentElement?.closest('script,style,textarea,input,[contenteditable]'))continue;const next=rename(node.nodeValue);if(next!==node.nodeValue)node.nodeValue=next;}
+ for(const element of root.querySelectorAll?.('[title],[aria-label],[alt]')||[]){for(const attr of ['title','aria-label','alt']){const value=element.getAttribute(attr);if(value&&rename(value)!==value)element.setAttribute(attr,rename(value));}}
+}
 window.reveraInstall=(deps,createScene)=>{
+ brandEditor(document.documentElement);
+ const brandObserver=new MutationObserver(()=>brandEditor(document.documentElement));
+ brandObserver.observe(document.documentElement,{subtree:true,childList:true,characterData:true});
  let last=null,connection=null,busy=false,faceMode=false,selectionFaces=[],selectedFace=null,selectionHash=null;
  const selectionModule=import('/face-selection.js');
  const overlay=document.createElement('canvas');Object.assign(overlay.style,{position:'fixed',pointerEvents:'none',zIndex:'1000'});document.body.append(overlay);
@@ -71,5 +81,5 @@ window.reveraInstall=(deps,createScene)=>{
  function createBlank(){const blank=createScene();try{return blank.save();}finally{blank.free();}}
  window.addEventListener('message',handle);
  const timer=setInterval(()=>{if(deps.getScene())parent.postMessage({channel:'revera-ready',hash:deps.getScene().state_hash().toString()},location.origin);},1500);
- return()=>{toolObserver.disconnect();window.removeEventListener('keydown',guardKeys,true);clearInterval(highlightTimer);overlay.remove();for(const type of ['pointerdown','pointerup','dblclick','click'])window.removeEventListener(type,capture,true);clearInterval(timer);window.removeEventListener('message',handle);if(last&&connection!==null)try{last.api_connection_close(connection);}catch{}};
+ return()=>{brandObserver.disconnect();toolObserver.disconnect();window.removeEventListener('keydown',guardKeys,true);clearInterval(highlightTimer);overlay.remove();for(const type of ['pointerdown','pointerup','dblclick','click'])window.removeEventListener(type,capture,true);clearInterval(timer);window.removeEventListener('message',handle);if(last&&connection!==null)try{last.api_connection_close(connection);}catch{}};
 };
