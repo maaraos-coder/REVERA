@@ -15,6 +15,9 @@ for(const file of walk(editor)){
   const anchor='function CV(e){if(!Xn)return()=>{};';
   if(text.split(anchor).length!==2)throw Error('Cambió el punto de integración de Hew. Revisa la versión antes de compilar.');
   text=text.replace(anchor,'function CV(e){if(!Xn)return window.reveraInstall(e,()=>new N);');
+  const selectionAnchor='getSelectedIds:()=>N.getSelectedIds(),';
+  if(text.split(selectionAnchor).length!==2)throw Error('Cambió la integración de selección de Hew.');
+  text=text.replace(selectionAnchor,'clearObjectHighlight:()=>{N.setSelected([]);N.setSelectedInstances([]);N.setSelectedInstanceMembers(null,[]);},'+selectionAnchor);
   text=text.replace('!Q9&&!$9&&!Xn&&`serviceWorker`in navigator?','false&&`serviceWorker`in navigator?');
  }
  if(path.basename(file)==='index.html')text=text.replace('</head>','<script src="/editor/revera-bridge.js"></script></head>');

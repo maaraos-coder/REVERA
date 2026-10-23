@@ -22,7 +22,7 @@ function inLoop(p,loop,n){
  for(const [a,b] of pairs(loop)){const [ax,ay]=axes.map(k=>a[k]),[bx,by]=axes.map(k=>b[k]);if(x>=Math.min(ax,bx)-EPS&&x<=Math.max(ax,bx)+EPS&&y>=Math.min(ay,by)-EPS&&y<=Math.max(ay,by)+EPS&&Math.abs((bx-ax)*(y-ay)-(by-ay)*(x-ax))<EPS)return true;if((ay>y)!==(by>y)&&x<(bx-ax)*(y-ay)/(by-ay)+ax)inside=!inside;}
  return inside;
 }
-function hit(origin,dir,f){const d=dot(f.normal,dir);if(Math.abs(d)<1e-12)return null;const t=dot(f.normal,sub(f.outer[0],origin))/d;if(t<=EPS)return null;const p=add(origin,mul(dir,t));return inLoop(p,f.outer,f.normal)&&!f.holes.some(h=>inLoop(p,h,f.normal))?t:null;}
+export function hit(origin,dir,f){const d=dot(f.normal,dir);if(Math.abs(d)<1e-12)return null;const t=dot(f.normal,sub(f.outer[0],origin))/d;if(t<=EPS)return null;const p=add(origin,mul(dir,t));return inLoop(p,f.outer,f.normal)&&!f.holes.some(h=>inLoop(p,h,f.normal))?t:null;}
 function clip(loop,n,p){const out=[];for(const[a,b]of pairs(loop)){const da=dot(n,sub(a,p)),db=dot(n,sub(b,p));if(da>=-EPS)out.push(a);if(da>EPS&&db<-EPS||da<-EPS&&db>EPS)out.push(add(a,mul(sub(b,a),da/(da-db))));}const clean=out.filter((q,i)=>!i||norm(sub(q,out[i-1]))>EPS);if(clean.length>1&&norm(sub(clean[0],clean.at(-1)))<EPS)clean.pop();return clean;}
 export function validate(faces,seed){
  const errors=[],edges=new Map(),key=p=>p.map(x=>Math.round(x/EPS)).join(',');

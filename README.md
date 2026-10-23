@@ -69,3 +69,8 @@ El sitio ofrece la fuente de Hew, la licencia y el código de la adaptación.
 La integración web usa `src/editor-bridge.js` dentro del editor modificado;
 no se la presenta como un plugin cerrado amparado por la excepción de Hew.
 El motor se comunica solo con la ventana padre del mismo origen.
+
+## Selección de caras y datos acústicos
+En Editor 3D, activa **Seleccionar caras** para elegir una superficie sin seleccionar ni mover el objeto completo. Desactiva el modo para continuar dibujando. En Arquitectónico y Acústico basta hacer clic en la cara; arrastrar orbita. La tabla de superficies también permite seleccionar con clic o Enter.
+
+El panel muestra área y normal y guarda nombre, material y absorción por octavas de 125 a 4000 Hz. Los coeficientes deben ser datos verificados del material: no hay valores predeterminados ni cálculo de reverberación todavía. Guarda en formato REVERA para incluir estos datos; HEW conserva solamente el dibujo. La asociación usa el contorno geométrico de la cara, independiente del orden o normal; si cambia el contorno se debe reasignar. Caras exactamente coincidentes comparten asociación. El modo del editor selecciona superficies visibles en el modelo exportado; no contempla recortes de sección. Tras editar la geometría, reactiva la selección.

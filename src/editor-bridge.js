@@ -4,7 +4,17 @@
  */
 try{localStorage.setItem('hew.settings.showWelcome','false');if(localStorage.getItem('revera.workspace-layout')!=='1'){localStorage.setItem('hew.railNarrow','1');localStorage.setItem('revera.workspace-layout','1');}}catch{}
 window.reveraInstall=(deps,createScene)=>{
- let last=null,connection=null,busy=false;
+ let last=null,connection=null,busy=false,faceMode=false,selectionFaces=[],selectedFace=null,selectionHash=null;
+ const selectionModule=import('/face-selection.js');
+ const overlay=document.createElement('canvas');Object.assign(overlay.style,{position:'fixed',pointerEvents:'none',zIndex:'1000'});document.body.append(overlay);
+ const renderer=()=>[...document.querySelectorAll('canvas')].filter(c=>c!==overlay).sort((a,b)=>b.clientWidth*b.clientHeight-a.clientWidth*a.clientHeight)[0];
+ let down=null;
+ function guardKeys(e){if(faceMode&&['Delete','Backspace'].includes(e.key)&&!e.target.closest?.('input,textarea,[contenteditable=true]')){e.preventDefault();e.stopImmediatePropagation();}}
+ window.addEventListener('keydown',guardKeys,true);
+ function capture(e){if(!faceMode||e.button!==0||e.target!==renderer())return;e.stopImmediatePropagation();e.preventDefault();if(e.type==='pointerdown')down=[e.clientX,e.clientY];if(e.type==='pointerup'&&down){const moved=Math.hypot(e.clientX-down[0],e.clientY-down[1]);down=null;if(moved>5)return;selectionModule.then(({pickFace,cameraRay})=>{if(selectionHash!==active().state_hash().toString()){parent.postMessage({channel:'revera-face-stale'},location.origin);return;}const r=renderer().getBoundingClientRect(),camera=deps.getViewportApi()?.getCameraState();if(!camera)return;const ray=cameraRay(camera,e.clientX-r.left,e.clientY-r.top,r.width,r.height);selectedFace=pickFace(selectionFaces,ray.origin,ray.direction);parent.postMessage({channel:'revera-face',face:selectedFace},location.origin);});}}
+ for(const type of ['pointerdown','pointerup','dblclick','click'])window.addEventListener(type,capture,true);
+ const highlightTimer=setInterval(()=>{const c=renderer(),api=deps.getViewportApi();if(!c||!api)return;const r=c.getBoundingClientRect();Object.assign(overlay.style,{left:r.left+'px',top:r.top+'px',width:r.width+'px',height:r.height+'px'});overlay.width=r.width*devicePixelRatio;overlay.height=r.height*devicePixelRatio;const ctx=overlay.getContext('2d');ctx.scale(devicePixelRatio,devicePixelRatio);if(!faceMode||!selectedFace)return;ctx.beginPath();for(const loop of [selectedFace.outer,...selectedFace.holes]){const points=loop.map(p=>api.worldToScreen(p));if(points.some(p=>p.behind))return;points.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.closePath();}ctx.fillStyle='#52ddbe66';ctx.fill('evenodd');ctx.strokeStyle='#96ffe4';ctx.lineWidth=2;ctx.stroke();},80);
+
  function rpc(scene,method,params={}){
   let id=scene===last?connection:scene.api_connection_open();
   const call=(m,p)=>{const r=JSON.parse(scene.api_dispatch(id,JSON.stringify({jsonrpc:'2.0',id:1,method:m,params:p})));if(r.error)throw Error(r.error.data?.explanation||r.error.message);return r.result;};
@@ -20,7 +30,8 @@ window.reveraInstall=(deps,createScene)=>{
   try{
    if(busy)throw Error('Hay otra operación en curso en el editor.');busy=true;
    const scene=active();let result;
-   if(method==='ping')result={ready:true,version:'1.2.3',objects:rpc(scene,'hew.query.scene').document.objects,sketches:rpc(scene,'hew.query.scene').document.sketches};
+   if(method==='face-mode'){faceMode=!!params.enabled;selectionFaces=params.faces||[];selectedFace=null;selectionHash=scene.state_hash().toString();if(faceMode)deps.getViewportApi()?.clearObjectHighlight();result={done:true};}
+   else if(method==='ping')result={ready:true,version:'1.2.3',objects:rpc(scene,'hew.query.scene').document.objects,sketches:rpc(scene,'hew.query.scene').document.sketches};
    else if(method==='snapshot'){
     // Host export preserves non-solid sheets. API export intentionally filters
     // them, which is inappropriate for an acoustic surface model.
@@ -55,5 +66,5 @@ window.reveraInstall=(deps,createScene)=>{
  function createBlank(){const blank=createScene();try{return blank.save();}finally{blank.free();}}
  window.addEventListener('message',handle);
  const timer=setInterval(()=>{if(deps.getScene())parent.postMessage({channel:'revera-ready',hash:deps.getScene().state_hash().toString()},location.origin);},1500);
- return()=>{clearInterval(timer);window.removeEventListener('message',handle);if(last&&connection!==null)try{last.api_connection_close(connection);}catch{}};
+ return()=>{window.removeEventListener('keydown',guardKeys,true);clearInterval(highlightTimer);overlay.remove();for(const type of ['pointerdown','pointerup','dblclick','click'])window.removeEventListener(type,capture,true);clearInterval(timer);window.removeEventListener('message',handle);if(last&&connection!==null)try{last.api_connection_close(connection);}catch{}};
 };

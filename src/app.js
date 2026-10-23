@@ -1,3 +1,4 @@
+import {faceKey,bands,absorption} from './face-selection.js';
 import {demoFaces,prepare} from './geometry.js';
 import {editorCall,encodeBytes,roomCommands} from './editor-client.js';
 import {parseDxf} from './dxf.js';
@@ -9,11 +10,12 @@ worker.onmessage=({data})=>{const pending=jobs.get(data.id);if(!pending)return;c
 function compute(method,body){return new Promise((resolve,reject)=>{const id=++job;const timer=setTimeout(()=>{jobs.delete(id);reject(Error('La geometría tardó demasiado. Simplifica el modelo.'));},45000);jobs.set(id,{resolve,reject,timer});worker.postMessage({id,method,...body});});}
 
 const canvas=$('view'),ctx=canvas.getContext('2d');
+let selectedFace=null,faceProperties={},projectedFaces=[],faceSelection=false;
 let yaw=-.8,pitch=.55,zoom=1,drag=null;
 const controls=['demo','extract','file','project','save','sync','saveHew'];
 function message(text,error=false){$('message').textContent=text;$('message').style.borderColor=error?'#edab77':'#80cbb4';}
 async function action(fn){if(busy)return;busy=true;controls.forEach(id=>$(id).disabled=true);try{await fn();}catch(e){message(e.message,true);}finally{busy=false;controls.forEach(id=>$(id).disabled=false);$('save').disabled=!editorReady;$('extract').disabled=!editorReady;}}
-function load(data){model=data;result=null;mode='architecture';zoom=1;$('modelName').textContent=data.name;renderResult();message(data.warnings?.join(' ')||'Modelo cargado. Indica un punto dentro del aire y genera la envolvente acústica.');draw();}
+function load(data){clearFace();model=data;result=null;mode='architecture';zoom=1;$('modelName').textContent=data.name;renderResult();message(data.warnings?.join(' ')||'Modelo cargado. Indica un punto dentro del aire y genera la envolvente acústica.');draw();}
 function renderResult(){
  $('drawing').setAttribute('aria-pressed',String(mode==='editor'));
  $('editor').hidden=mode!=='editor';canvas.hidden=mode==='editor';$('canvasLabels').hidden=mode==='editor';
@@ -26,7 +28,7 @@ function renderResult(){
  $('valid').style.color=result?.valid?'#8bd5bf':'#eac28e';
  const rows=$('faces');rows.replaceChildren();
  if(!result){const row=rows.insertRow();const cell=row.insertCell();cell.colSpan=4;cell.textContent='Genera el modelo acústico para revisar sus caras.';return;}
- for(const face of result.faces){const row=rows.insertRow();for(const value of [face.id,face.name,face.area.toFixed(3),face.normal.map(x=>x.toFixed(2)).join(', ')])row.insertCell().textContent=value;}
+ for(const face of result.faces){const row=rows.insertRow();for(const value of [face.id,face.name,face.area.toFixed(3),face.normal.map(x=>x.toFixed(2)).join(', ')])row.insertCell().textContent=value;row.tabIndex=0;row.onclick=()=>{mode='acoustic';renderResult();selectFace(face);draw();};row.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();row.onclick();}};}
 }
 function seed(){return ['sx','sy','sz'].map(id=>Number($(id).value));}
 function bounds(){const points=model?.faces.flatMap(f=>f.outer)||[[0,0,0],[6,4,3]];const lo=[0,1,2].map(k=>points.reduce((v,p)=>Math.min(v,p[k]),Infinity)),hi=[0,1,2].map(k=>points.reduce((v,p)=>Math.max(v,p[k]),-Infinity));return {center:lo.map((v,k)=>(v+hi[k])/2),size:Math.max(...hi.map((v,k)=>v-lo[k]),1)};}
@@ -46,7 +48,8 @@ function draw(){
  // Display-only ceiling cut. Geometry and validation always retain it.
  if($('roof').checked)faces=faces.filter(f=>!(Math.abs(f.normal[2])>.99&&f.centroid[2]>center[2]));
  const projected=faces.map(f=>({f,loops:[f.outer,...f.holes].map(l=>l.map(project)),depth:camera(f.centroid)[2]})).sort((a,b)=>b.depth-a.depth);
- for(const {f,loops} of projected){ctx.beginPath();for(const loop of loops){loop.forEach((p,j)=>j?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.closePath();}ctx.fillStyle=acoustic?'rgba(94,192,160,.38)':'rgba(112,144,170,.32)';ctx.fill('evenodd');ctx.strokeStyle=acoustic?'#81d9b8':'#9db1c3';ctx.lineWidth=acoustic?1.3:.8;ctx.stroke();}
+ projectedFaces=projected;
+ for(const {f,loops} of projected){const selected=selectedFace&&faceKey(f)===faceKey(selectedFace);ctx.beginPath();for(const loop of loops){loop.forEach((p,j)=>j?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.closePath();}ctx.fillStyle=selected?'rgba(70,240,191,.65)':acoustic?'rgba(94,192,160,.38)':'rgba(112,144,170,.32)';ctx.fill('evenodd');ctx.strokeStyle=selected?'#d4fff1':acoustic?'#81d9b8':'#9db1c3';ctx.lineWidth=acoustic?1.3:.8;ctx.stroke();}
  const s=project(seed());ctx.beginPath();ctx.arc(s[0],s[1],5,0,Math.PI*2);ctx.fillStyle='#ffd08c';ctx.fill();ctx.strokeStyle='#39271a';ctx.stroke();
  ctx.fillStyle='#abc0ce';ctx.font='11px Segoe UI';ctx.fillText('Z ↑ · unidades: metros',18,h-42);
 }
@@ -85,27 +88,27 @@ $('extract').onclick=()=>action(async()=>{
 for(const view of ['drawing','architecture','acoustic'])$(view).onclick=()=>{mode=view==='drawing'?'editor':view;renderResult();draw();};
 $('roof').onchange=draw;$('fit').onclick=()=>{zoom=1;yaw=-.8;pitch=.55;draw();};
 for(const id of ['sx','sy','sz','surfaceOnly'])$(id).oninput=()=>{if(result){result=null;mode='architecture';renderResult();message('Cambió el punto interior. Genera nuevamente el modelo acústico.');}draw();};
-$('save').onclick=()=>action(async()=>{await syncModel(model?.name);download(new Blob([JSON.stringify({format:'revera',version:2,model,seed:seed()},null,2)],{type:'application/json'}),'proyecto.revera');persist();message('Proyecto descargado con el dibujo actual del editor.');});
+$('save').onclick=()=>action(async()=>{await syncModel(model?.name);download(new Blob([JSON.stringify({format:'revera',version:2,model,faceProperties,seed:seed()},null,2)],{type:'application/json'}),'proyecto.revera');persist();message('Proyecto descargado con el dibujo actual del editor.');});
 async function restoreProject(data){
  if(data.format!=='revera'||![1,2].includes(data.version)||!Array.isArray(data.model?.faces)||!Array.isArray(data.seed)||data.seed.length!==3)throw Error('Proyecto REVERA inválido.');
  if(data.model.faces.length>5000)throw Error('El proyecto supera el límite de 5.000 caras.');
  const checked=await compute('validate',{faces:data.model.faces,seed:data.seed});
  if(data.model.editor_bytes){const state=await editorCall('ping');if((state.objects||state.sketches)&&!confirm('Recuperar el proyecto reemplaza el dibujo actual. ¿Continuar?'))return;await editorCall('load',{bytes:data.model.editor_bytes});}
- $('surfaceOnly').checked=!!data.model.surfaceOnly;load({...data.model,faces:checked.faces});['sx','sy','sz'].forEach((id,k)=>$(id).value=data.seed[k]);renderResult();draw();message(data.model.editor_bytes?'Proyecto y dibujo recuperados. Genera la envolvente para validar nuevamente.':'Proyecto del prototipo anterior: geometría recuperada para consulta; importa el HEW original para seguir dibujando.');
+ faceProperties=data.faceProperties&&typeof data.faceProperties==='object'?data.faceProperties:{};$('surfaceOnly').checked=!!data.model.surfaceOnly;load({...data.model,faces:checked.faces});['sx','sy','sz'].forEach((id,k)=>$(id).value=data.seed[k]);renderResult();draw();message(data.model.editor_bytes?'Proyecto y dibujo recuperados. Genera la envolvente para validar nuevamente.':'Proyecto del prototipo anterior: geometría recuperada para consulta; importa el HEW original para seguir dibujando.');
 }
 $('project').onchange=event=>action(async()=>{const file=event.target.files[0];if(file.size>48*1024*1024)throw Error('Proyecto demasiado grande.');await restoreProject(JSON.parse(await file.text()));});
 $('saveHew').onclick=()=>action(async()=>{const {bytes}=await editorCall('save');download(new Blob([Uint8Array.from(atob(bytes),c=>c.charCodeAt(0))],{type:'application/octet-stream'}),'modelo.hew');message('Dibujo HEW descargado.');});
 function download(blob,name){const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
-function persist(){try{localStorage.setItem('revera-project-v2',JSON.stringify({format:'revera',version:2,model,seed:seed()}));$('localStatus').textContent='Última extracción guardada en este navegador';}catch{$('localStatus').textContent='Descarga el proyecto para conservarlo: espacio local insuficiente';}}
+function persist(){try{localStorage.setItem('revera-project-v2',JSON.stringify({format:'revera',version:2,model,faceProperties,seed:seed()}));$('localStatus').textContent='Última extracción guardada en este navegador';}catch{$('localStatus').textContent='Descarga el proyecto para conservarlo: espacio local insuficiente';}}
 $('restoreLocal').onclick=()=>action(async()=>{const data=localStorage.getItem('revera-project-v2');if(!data)throw Error('Todavía no hay un proyecto guardado en este navegador.');await restoreProject(JSON.parse(data));});
-canvas.onpointerdown=e=>{drag={x:e.clientX,y:e.clientY};canvas.setPointerCapture(e.pointerId);};
-canvas.onpointermove=e=>{if(!drag)return;yaw-=(e.clientX-drag.x)*.008;pitch=Math.max(-1.4,Math.min(1.4,pitch+(e.clientY-drag.y)*.008));drag={x:e.clientX,y:e.clientY};draw();};
-canvas.onpointerup=canvas.onpointercancel=()=>drag=null;
+canvas.onpointerdown=e=>{drag={x:e.clientX,y:e.clientY,startX:e.clientX,startY:e.clientY,moved:false};canvas.setPointerCapture(e.pointerId);};
+canvas.onpointermove=e=>{if(!drag)return;yaw-=(e.clientX-drag.x)*.008;pitch=Math.max(-1.4,Math.min(1.4,pitch+(e.clientY-drag.y)*.008));drag={...drag,x:e.clientX,y:e.clientY,moved:drag.moved||Math.hypot(e.clientX-drag.startX,e.clientY-drag.startY)>5};draw();};
+canvas.onpointerup=e=>{if(drag&&!drag.moved){const r=canvas.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;let found=null;for(const {f,loops} of projectedFaces){const path=new Path2D();for(const loop of loops){loop.forEach((p,i)=>i?path.lineTo(...p.slice(0,2)):path.moveTo(...p.slice(0,2)));path.closePath();}if(ctx.isPointInPath(path,x*(devicePixelRatio||1),y*(devicePixelRatio||1),'evenodd'))found=f;}selectFace(found);draw();}drag=null;};canvas.onpointercancel=()=>drag=null;
 canvas.addEventListener('wheel',e=>{e.preventDefault();zoom=Math.max(.2,Math.min(5,zoom*Math.exp(-e.deltaY*.001)));draw();},{passive:false});
 new ResizeObserver(draw).observe(canvas);
 window.addEventListener('revera-editor-ready',async event=>{
  if(!editorReady){editorReady=true;$('status').textContent='Editor 3D conectado · procesamiento en tu navegador';$('extract').disabled=false;$('save').disabled=false;}
- const hash=event.detail?.hash;if(hash&&lastEditorHash&&hash!==lastEditorHash&&result){result=null;mode=mode==='acoustic'?'editor':mode;renderResult();message('Cambió el dibujo. Genera nuevamente el modelo acústico para actualizar sus resultados.');}
+ const hash=event.detail?.hash;if(hash&&lastEditorHash&&hash!==lastEditorHash){clearFace();if(faceSelection){faceSelection=false;$('faceMode').setAttribute('aria-pressed','false');editorCall('face-mode',{enabled:false}).catch(()=>{});message('Cambió la geometría. Activa de nuevo Seleccionar caras para actualizar las superficies.');}}if(hash&&lastEditorHash&&hash!==lastEditorHash&&result){result=null;mode=mode==='acoustic'?'editor':mode;renderResult();message('Cambió el dibujo. Genera nuevamente el modelo acústico para actualizar sus resultados.');}
  if(hash)lastEditorHash=hash;
 });
 try{if(localStorage.getItem('revera-project-v2'))$('localStatus').textContent='Hay un proyecto anterior disponible para recuperar';}catch{}
@@ -122,3 +125,12 @@ window.addEventListener('keydown',e=>{if(e.key==='Escape'&&document.body.classLi
 function setResults(open){$('resultsPanel').hidden=!open;$('resultsToggle').setAttribute('aria-expanded',String(open));$('resultsToggle').textContent=open?'Ocultar superficies ↓':'Ver superficies ↑';}
 $('resultsToggle').onclick=()=>setResults($('resultsPanel').hidden);
 $('resultsClose').onclick=()=>setResults(false);
+
+function clearFace(){selectedFace=null;$('facePanel').hidden=true;}
+function selectFace(face){selectedFace=face;$('facePanel').hidden=!face;if(!face)return;const data=faceProperties[faceKey(face)]||{};$('faceGeometry').textContent=`${face.id} · ${face.area.toFixed(3)} m² · Normal: ${face.normal.map(v=>v.toFixed(2)).join(', ')}`;$('faceName').value=data.name||face.name||face.id;$('faceMaterial').value=data.material||'';bands.forEach((band,i)=>$('alpha'+band).value=data.alpha?.[i]??'');for(const row of $('faces').rows)row.setAttribute('aria-selected',String(row.cells[0]?.textContent===face.id));}
+for(const band of bands){const label=document.createElement('label');label.textContent=band+' Hz';const input=document.createElement('input');input.id='alpha'+band;input.type='number';input.min=0;input.max=1;input.step=.01;input.placeholder='—';input.required=true;label.append(input);$('absorptionInputs').append(label);}
+$('faceClose').onclick=()=>{clearFace();draw();if(faceSelection)editorCall('face-mode',{enabled:true,faces:model?.faces||[]}).catch(()=>{});};
+$('faceForm').onsubmit=e=>{e.preventDefault();if(!selectedFace)return;try{const alpha=absorption(bands.map(b=>Number($('alpha'+b).value)));faceProperties[faceKey(selectedFace)]={name:$('faceName').value.trim(),material:$('faceMaterial').value.trim(),alpha};persist();message('Propiedades guardadas para esta cara. Descarga el proyecto REVERA para conservarlas con el dibujo.');}catch(error){message(error.message,true);}};
+$('faceMode').onclick=()=>action(async()=>{if(faceSelection){await editorCall('face-mode',{enabled:false});faceSelection=false;}else{message('Preparando selección de superficies…');const data=await syncModel(model?.name);await editorCall('face-mode',{enabled:true,faces:data.faces});faceSelection=true;mode='editor';renderResult();message('Clic izquierdo: seleccionar una cara. Usa las herramientas de órbita del editor o desactiva Seleccionar caras para editar objetos.');}clearFace();$('faceMode').setAttribute('aria-pressed',String(faceSelection));});
+window.addEventListener('revera-face',e=>selectFace(e.detail));
+window.addEventListener('revera-face-stale',()=>{clearFace();message('Cambió el dibujo. Desactiva y vuelve a activar Seleccionar caras para actualizarlo.',true);});

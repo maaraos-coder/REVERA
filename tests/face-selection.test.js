@@ -1,0 +1,10 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {prepare} from '../src/geometry.js';
+import {pickFace,faceKey,cameraRay,absorption} from '../src/face-selection.js';
+const face=z=>prepare({outer:[[0,0,z],[2,0,z],[2,2,z],[0,2,z]]});
+test('picks closest face, not the entire object',()=>{const a=face(0),b=face(1);assert.equal(pickFace([a,b],[1,1,3],[0,0,-1]),b);assert.equal(pickFace([a,b],[4,4,3],[0,0,-1]),null);});
+test('ray passes through a face opening',()=>{const a=prepare({...face(1),holes:[[[.5,.5,1],[1.5,.5,1],[1.5,1.5,1],[.5,1.5,1]]]});const b=face(0);assert.equal(pickFace([a,b],[1,1,3],[0,0,-1]),b);});
+test('face properties identity survives ordering and reversed normals',()=>{const a=face(0);assert.equal(faceKey(a),faceKey({...a,outer:[...a.outer].reverse()}));assert.notEqual(faceKey(a),faceKey(face(1)));});
+test('camera rays support perspective and parallel projection',()=>{const c={eye:[1,1,3],target:[1,1,0],up:[0,1,0],fovDeg:60,parallelHeight:4};assert.equal(pickFace([face(0)],...Object.values(cameraRay({...c,projection:'perspective'},100,100,200,200))).area,4);const ray=cameraRay({...c,projection:'parallel'},150,100,200,200);assert.deepEqual(ray.origin,[2,1,3]);assert.deepEqual(ray.direction,[0,0,-1]);});
+test('absorption refuses invalid coefficients',()=>{assert.throws(()=>absorption([0,0,0,0,0,1.1]));assert.throws(()=>absorption([0,0,0,0,0,NaN]));assert.deepEqual(absorption([0,.1,.2,.3,.4,1]),[0,.1,.2,.3,.4,1]);});
