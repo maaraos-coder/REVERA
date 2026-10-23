@@ -27,12 +27,12 @@ window.reveraInstall=(deps,createScene)=>{
  window.addEventListener('click',toggleDrawingEraser,true);
  function resumeDrawing(){if(!faceMode&&!eraseMode)return;faceMode=false;eraseMode=false;document.body.classList?.toggle('revera-erasing',false);selectedFace=null;down=null;parent.postMessage({channel:'revera-face-mode',enabled:false},location.origin);}
  // Tool rail state also follows menu commands and keyboard shortcuts.
- const toolObserver=new MutationObserver(()=>{const tool=activeDrawingTool();if(tool&&tool!=='Select'&&directFace){directFace=false;selectedFace=null;}if((faceMode||eraseMode)&&tool&&tool!=='Select')resumeDrawing();});
+ const toolObserver=new MutationObserver(()=>{const tool=activeDrawingTool();if(tool&&tool!=='Select'){directGesture=false;if(directFace){directFace=false;selectedFace=null;}}if((faceMode||eraseMode)&&tool&&tool!=='Select')resumeDrawing();});
  toolObserver.observe(document.body,{subtree:true,attributes:true,attributeFilter:['aria-checked']});
  function guardKeys(e){if(deleteHeld&&['Delete','Backspace'].includes(e.key)){e.preventDefault();e.stopImmediatePropagation();return;}if(directFace&&!e.target.closest?.('input,textarea,[contenteditable=true]')){if(e.key==='Escape'){directFace=false;selectedFace=null;return;}if(['Delete','Backspace'].includes(e.key)){deleteHeld=true;e.preventDefault();e.stopImmediatePropagation();if(selectionHash===active().state_hash().toString())parent.postMessage({channel:'revera-delete-selected-face',face:selectedFace},location.origin);directFace=false;selectedFace=null;return;}}if(e.key==='Escape'&&(faceMode||eraseMode)){resumeDrawing();return;}if((faceMode||eraseMode)&&['Delete','Backspace'].includes(e.key)&&!e.target.closest?.('input,textarea,[contenteditable=true]')){e.preventDefault();e.stopImmediatePropagation();}}
  window.addEventListener('keydown',guardKeys,true);
  const releaseDelete=()=>{deleteHeld=false;};window.addEventListener('keyup',releaseDelete,true);window.addEventListener('blur',releaseDelete);
- function capture(e){if(e.type==='pointerdown'&&e.target===renderer())parent.postMessage({channel:'revera-drawing-interaction'},location.origin);const tool=activeDrawingTool();if((faceMode||eraseMode)&&tool&&tool!=='Select')resumeDrawing();if(!faceMode&&!eraseMode&&e.target===renderer()){
+ function capture(e){if(e.type==='pointerdown'&&e.target===renderer())parent.postMessage({channel:'revera-drawing-interaction'},location.origin);const tool=activeDrawingTool();if(tool&&tool!=='Select'){directGesture=false;if(directFace){directFace=false;selectedFace=null;}}if((faceMode||eraseMode)&&tool&&tool!=='Select')resumeDrawing();if(!faceMode&&!eraseMode&&e.target===renderer()){
   if(e.type==='pointerdown'){
    directGesture=false;directFace=false;selectedFace=null;
    if(drawingMath?.plainSelect(e,tool))try{
