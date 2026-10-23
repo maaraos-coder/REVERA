@@ -132,7 +132,7 @@ function selectFace(face){selectedFace=face;$('facePanel').hidden=!face;if(!face
 for(const band of bands){const label=document.createElement('label');label.textContent=band+' Hz';const input=document.createElement('input');input.id='alpha'+band;input.type='number';input.min=0;input.max=1;input.step=.01;input.placeholder='—';input.required=true;label.append(input);$('absorptionInputs').append(label);}
 $('faceClose').onclick=()=>{clearFace();draw();if(faceSelection)editorCall('face-mode',{enabled:true,faces:model?.faces||[]}).catch(()=>{});};
 $('faceForm').onsubmit=e=>{e.preventDefault();if(!selectedFace)return;try{const alpha=absorption(bands.map(b=>Number($('alpha'+b).value)));faceProperties[faceKey(selectedFace)]={name:$('faceName').value.trim(),material:$('faceMaterial').value.trim(),alpha};persist();message('Propiedades guardadas para esta cara. Descarga el proyecto REVERA para conservarlas con el dibujo.');}catch(error){message(error.message,true);}};
-$('faceMode').onclick=()=>action(async()=>{if(eraseSelection){await editorCall('erase-mode',{enabled:false});setEraseState(false);}if(faceSelection){await editorCall('face-mode',{enabled:false});faceSelection=false;}else{message('Preparando selección de superficies…');const data=await syncModel(model?.name);await editorCall('face-mode',{enabled:true,faces:data.faces});faceSelection=true;mode='editor';renderResult();message('Haz clic en una cara para consultar su área y editar sus propiedades acústicas. Usa Borrar caras para modificar el dibujo.');}clearFace();$('faceMode').setAttribute('aria-pressed',String(faceSelection));});
+$('faceMode').onclick=()=>action(async()=>{if(eraseSelection){await editorCall('erase-mode',{enabled:false});setEraseState(false);}if(faceSelection){await editorCall('face-mode',{enabled:false});faceSelection=false;}else{message('Preparando selección de superficies…');const data=await syncModel(model?.name);await editorCall('face-mode',{enabled:true,faces:data.faces});faceSelection=true;mode='editor';renderResult();message('Haz clic en una cara para consultar su área y editar sus propiedades acústicas. Para modificar el dibujo, vuelve a Seleccionar y pulsa Supr sobre la cara elegida.');}clearFace();$('faceMode').setAttribute('aria-pressed',String(faceSelection));});
 window.addEventListener('revera-face',e=>selectFace(e.detail));
 window.addEventListener('revera-face-stale',()=>{clearFace();message('Cambió el dibujo. Desactiva y vuelve a activar Propiedades de cara para actualizarlo.',true);});
 
@@ -173,3 +173,5 @@ $('undoFaceToolbar').onclick=undoDeletedFace;
 window.addEventListener('revera-erase-face',e=>{if(!busy&&eraseSelection&&e.detail)deleteDrawingFace(e.detail);});
 
 window.addEventListener('revera-erase-toggle',()=>{if(!busy)$('eraseFaces').click();});
+
+window.addEventListener('revera-delete-selected-face',e=>{if(!busy&&e.detail)deleteDrawingFace(e.detail);});
