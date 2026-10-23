@@ -139,7 +139,7 @@ panelToggle.onclick=()=>{if(document.body.classList.contains('focus-mode')){setF
 function setFocus(on){document.body.classList.toggle('focus-mode',on);focusToggle.setAttribute('aria-pressed',String(on));focusToggle.textContent=on?'Restaurar vista':'Ampliar vista';panelToggle.setAttribute('aria-expanded',String(!on&&!document.body.classList.contains('panel-hidden')));requestAnimationFrame(draw);}
 focusToggle.onclick=()=>setFocus(!document.body.classList.contains('focus-mode'));
 window.addEventListener('keydown',e=>{if(e.key==='Escape'&&document.body.classList.contains('focus-mode'))setFocus(false);});
-function setResults(open){$('resultsPanel').hidden=!open;$('resultsToggle').setAttribute('aria-expanded',String(open));$('resultsToggle').textContent=open?'Ocultar superficies ↓':'Ver superficies ↑';}
+function setResults(open){if(open)setPanelHidden(true);$('resultsPanel').hidden=!open;$('resultsToggle').setAttribute('aria-expanded',String(open));$('resultsToggle').textContent=open?'Ocultar superficies ↓':'Ver superficies ↑';}
 $('resultsToggle').onclick=()=>setResults($('resultsPanel').hidden);
 $('resultsClose').onclick=()=>setResults(false);
 
@@ -158,7 +158,7 @@ window.addEventListener('revera-face-mode',()=>{setEraseState(false);faceSelecti
 const railButtons=[...document.querySelectorAll('[data-project]')],projectGroups=[...$('projectPanel').querySelectorAll(':scope > details.control-group')];
 let activeProject=0;
 const projectTitles=['Importar modelo','Sala de prueba','Modelo acústico','Guardar y recuperar'];
-function showProject(index){const alreadyOpen=!document.body.classList.contains('panel-hidden')&&activeProject===index;if(document.body.classList.contains('focus-mode'))setFocus(false);activeProject=index;projectGroups.forEach((group,i)=>{group.hidden=i!==index;group.open=i===index;});$('projectPanel').querySelector('h1').textContent=projectTitles[index];setPanelHidden(alreadyOpen);}
+function showProject(index){setResults(false);const alreadyOpen=!document.body.classList.contains('panel-hidden')&&activeProject===index;if(document.body.classList.contains('focus-mode'))setFocus(false);activeProject=index;projectGroups.forEach((group,i)=>{group.hidden=i!==index;group.open=i===index;});$('projectPanel').querySelector('h1').textContent=projectTitles[index];setPanelHidden(alreadyOpen);}
 railButtons.forEach(button=>button.onclick=()=>showProject(Number(button.dataset.project)));
 const panelState=new MutationObserver(()=>{const open=!document.body.classList.contains('panel-hidden')&&!document.body.classList.contains('focus-mode');railButtons.forEach((button,i)=>button.setAttribute('aria-expanded',String(open&&i===activeProject)));});
 panelState.observe(document.body,{attributes:true,attributeFilter:['class']});
@@ -200,3 +200,7 @@ function renderAbsorption(){
  const table=document.createElement('table'),head=table.createTHead().insertRow();['Banda · Hz',...summary.bands].forEach(v=>{const th=document.createElement('th');th.textContent=v;head.append(th);});const row=table.createTBody().insertRow();['A · m² equivalentes'+(summary.complete?'':' (parcial)'),...summary.equivalent.map(v=>v.toFixed(2))].forEach(v=>row.insertCell().textContent=v);host.append(table);
  const details=document.createElement('p');details.textContent=summary.faces.map(f=>`${f.id}: ${f.area.toFixed(2)} m² · ${f.material}${f.alpha?'':' · α pendiente'}`).join(' | ');host.append(details);
 }
+
+// Panels stop above the complete result strip, including wrapped metrics.
+const summaryObserver=new ResizeObserver(()=>{const metrics=document.querySelector('.metrics');const footerHeight=metrics.getBoundingClientRect().height+$('message').getBoundingClientRect().height+16;document.documentElement.style.setProperty('--summary-height',`${Math.ceil(footerHeight)}px`);});
+summaryObserver.observe(document.querySelector('.metrics'));summaryObserver.observe($('message'));

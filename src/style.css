@@ -40,3 +40,13 @@ body.focus-mode main{grid-template-columns:minmax(0,1fr)}
 
 /* Surface details stay compact; the drawing remains the main workspace. */
 .results-panel{max-height:min(26vh,220px)!important;overflow-y:auto;overscroll-behavior:contain;padding:10px 14px;scrollbar-width:thin}.results-panel .table-wrap{overflow:visible;margin-top:6px}.results-panel th,.results-panel td{padding:6px 9px}.results-panel .surface-head{position:sticky;top:-10px;background:#101e2c;z-index:1;padding:5px 0}.results-panel h2{margin-bottom:2px}#absorptionSummary{margin:5px 0}#absorptionSummary p{margin:5px 0}@media(max-width:800px){.results-panel{max-height:25vh!important}}
+/* Reserve the result strip below overlays, and allow every metric to fit. */
+:root{--summary-height:76px}
+.metrics{display:grid;grid-template-columns:repeat(5,minmax(0,1fr)) auto;height:auto;min-height:44px;padding:5px 0;align-items:center;overflow:visible}
+.metrics>div{display:flex;flex-direction:column;align-items:flex-start;gap:3px;min-width:0;padding:0 10px;white-space:normal}
+.metrics small{line-height:1.35;overflow-wrap:anywhere}
+.metrics strong{line-height:1.4;white-space:normal}
+.metrics>button{margin:0 5px;white-space:normal;max-width:120px}
+aside#projectPanel{bottom:var(--summary-height);max-height:calc(100dvh - var(--header) - var(--summary-height));}
+.results-panel{bottom:var(--summary-height)}
+@media(max-width:1000px){.metrics{grid-template-columns:repeat(3,minmax(0,1fr));row-gap:8px}.metrics>div:nth-child(4){display:flex}.metrics>button{max-width:none}}
