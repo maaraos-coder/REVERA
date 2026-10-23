@@ -1,0 +1,9 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {reviewEnvelope} from '../src/envelope-review.js';import {demoFaces,extract} from '../src/geometry.js';import {faceKey} from '../src/face-selection.js';
+const room=()=>extract(demoFaces(),[3,2,1.5]).faces;
+const reverse=f=>({...f,outer:[...f.outer].reverse(),holes:f.holes.map(l=>[...l].reverse())});
+test('closed D envelope validates without a user point, 6 faces 108 m² 72 m³',()=>{const r=reviewEnvelope(room());assert.equal(r.valid,true);assert.equal(r.face_count,6);assert.equal(r.surface_m2,108);assert.equal(r.volume_m3,72);assert.ok(r.faces.every(f=>f.orientation==='D'));});
+test('all F blocks volume until explicit orientation correction',()=>{const faces=room().map(reverse),before=JSON.stringify(faces),r=reviewEnvelope(faces);assert.equal(r.valid,false);assert.equal(r.outside_count,6);assert.equal(r.volume_m3,null);const fixed=reviewEnvelope(faces,{orient:true});assert.equal(fixed.valid,true);assert.equal(fixed.reversed_keys.length,6);assert.equal(fixed.volume_m3,72);assert.equal(JSON.stringify(faces),before);assert.equal(reviewEnvelope(faces,{flipped:fixed.reversed_keys}).valid,true);});
+test('one inverted face and an explicitly inverted D face block calculation',()=>{const faces=room();faces[2]=reverse(faces[2]);assert.equal(reviewEnvelope(faces).outside_count,1);assert.equal(reviewEnvelope(room(),{flipped:[faceKey(room()[0])]}).valid,false);});
+test('all D is insufficient: openings and duplicate faces invalidate closure',()=>{assert.equal(reviewEnvelope(room().slice(1)).valid,false);assert.equal(reviewEnvelope([...room(),room()[0]]).valid,false);});
+test('thick architectural walls can extract their interior without user coordinates',()=>{const r=reviewEnvelope(demoFaces(),{thick:true});assert.equal(r.valid,true);assert.equal(r.face_count,6);assert.equal(r.volume_m3,72);});
