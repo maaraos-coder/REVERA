@@ -134,3 +134,5 @@ $('faceForm').onsubmit=e=>{e.preventDefault();if(!selectedFace)return;try{const 
 $('faceMode').onclick=()=>action(async()=>{if(faceSelection){await editorCall('face-mode',{enabled:false});faceSelection=false;}else{message('Preparando selección de superficies…');const data=await syncModel(model?.name);await editorCall('face-mode',{enabled:true,faces:data.faces});faceSelection=true;mode='editor';renderResult();message('Clic izquierdo: seleccionar una cara. Usa las herramientas de órbita del editor o desactiva Seleccionar caras para editar objetos.');}clearFace();$('faceMode').setAttribute('aria-pressed',String(faceSelection));});
 window.addEventListener('revera-face',e=>selectFace(e.detail));
 window.addEventListener('revera-face-stale',()=>{clearFace();message('Cambió el dibujo. Desactiva y vuelve a activar Seleccionar caras para actualizarlo.',true);});
+
+window.addEventListener('revera-face-mode',()=>{faceSelection=false;clearFace();$('faceMode').setAttribute('aria-pressed','false');message('Herramienta de dibujo activa. Puedes dibujar normalmente; vuelve a Seleccionar caras para editar propiedades acústicas.');});
