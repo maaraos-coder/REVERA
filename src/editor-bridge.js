@@ -11,6 +11,7 @@ function brandEditor(root){
  for(const element of root.querySelectorAll?.('[title],[aria-label],[alt]')||[]){for(const attr of ['title','aria-label','alt']){const value=element.getAttribute(attr);if(value&&rename(value)!==value)element.setAttribute(attr,rename(value));}}
 }
 window.reveraInstall=(deps,createScene)=>{
+ const settingsStyle=document.createElement('style');settingsStyle.textContent='button[title^="Settings"]{width:auto!important;min-width:54px!important;padding:4px 9px!important;font-size:11px!important}button[title^="Settings"] svg{display:none!important}button[title^="Settings"]:after{content:"Ajustes";color:var(--text-primary,#c7d9e3)}';document.head.append(settingsStyle);
  brandEditor(document.documentElement);
  const brandObserver=new MutationObserver(()=>brandEditor(document.documentElement));
  brandObserver.observe(document.documentElement,{subtree:true,childList:true,characterData:true});
@@ -81,5 +82,5 @@ window.reveraInstall=(deps,createScene)=>{
  function createBlank(){const blank=createScene();try{return blank.save();}finally{blank.free();}}
  window.addEventListener('message',handle);
  const timer=setInterval(()=>{if(deps.getScene())parent.postMessage({channel:'revera-ready',hash:deps.getScene().state_hash().toString()},location.origin);},1500);
- return()=>{brandObserver.disconnect();toolObserver.disconnect();window.removeEventListener('keydown',guardKeys,true);clearInterval(highlightTimer);overlay.remove();for(const type of ['pointerdown','pointerup','dblclick','click'])window.removeEventListener(type,capture,true);clearInterval(timer);window.removeEventListener('message',handle);if(last&&connection!==null)try{last.api_connection_close(connection);}catch{}};
+ return()=>{settingsStyle.remove();brandObserver.disconnect();toolObserver.disconnect();window.removeEventListener('keydown',guardKeys,true);clearInterval(highlightTimer);overlay.remove();for(const type of ['pointerdown','pointerup','dblclick','click'])window.removeEventListener(type,capture,true);clearInterval(timer);window.removeEventListener('message',handle);if(last&&connection!==null)try{last.api_connection_close(connection);}catch{}};
 };

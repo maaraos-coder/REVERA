@@ -119,7 +119,7 @@ const panelToggle=$('panelToggle'),focusToggle=$('focusToggle');
 function setPanelHidden(hidden){document.body.classList.toggle('panel-hidden',hidden);panelToggle.setAttribute('aria-expanded',String(!hidden));panelToggle.title=hidden?'Mostrar panel del proyecto':'Ocultar panel del proyecto';}
 setPanelHidden(true);
 panelToggle.onclick=()=>{if(document.body.classList.contains('focus-mode')){setFocus(false);setPanelHidden(false);return;}setPanelHidden(!document.body.classList.contains('panel-hidden'));};
-function setFocus(on){document.body.classList.toggle('focus-mode',on);focusToggle.setAttribute('aria-pressed',String(on));focusToggle.textContent=on?'↙ Salir del modo dibujo':'⛶ Modo dibujo';panelToggle.setAttribute('aria-expanded',String(!on&&!document.body.classList.contains('panel-hidden')));requestAnimationFrame(draw);}
+function setFocus(on){document.body.classList.toggle('focus-mode',on);focusToggle.setAttribute('aria-pressed',String(on));focusToggle.textContent=on?'Restaurar vista':'Ampliar vista';panelToggle.setAttribute('aria-expanded',String(!on&&!document.body.classList.contains('panel-hidden')));requestAnimationFrame(draw);}
 focusToggle.onclick=()=>setFocus(!document.body.classList.contains('focus-mode'));
 window.addEventListener('keydown',e=>{if(e.key==='Escape'&&document.body.classList.contains('focus-mode'))setFocus(false);});
 function setResults(open){$('resultsPanel').hidden=!open;$('resultsToggle').setAttribute('aria-expanded',String(open));$('resultsToggle').textContent=open?'Ocultar superficies ↓':'Ver superficies ↑';}
