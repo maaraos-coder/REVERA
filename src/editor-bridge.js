@@ -17,11 +17,20 @@ function brandEditor(root){
  "Click the object you want to move.":"Haz clic en el objeto que quieres mover.",
  "Click a base point to start the move.":"Haz clic en un punto de referencia para comenzar a mover.",
  "On Face":"Sobre la cara","On Edge":"Sobre la arista","Ground":"Suelo",
+ "Orbit":"Orbitar","Top":"Superior","Front":"Frontal","Iso":"Isométrica",
+ "Rotate the camera around the model.":"Gira la cámara alrededor del modelo. Atajo: O; también puedes arrastrar con la rueda pulsada.",
+ "Pan the camera without rotating.":"Desplaza la cámara sin girarla. Atajo: H; también Mayús + arrastrar con la rueda pulsada.",
+ "OBJECT INFO":"INFORMACIÓN DEL OBJETO","OUTLINER":"ESTRUCTURA DEL MODELO","MATERIALS":"MATERIALES","COMPONENTS":"COMPONENTES","TAGS":"ETIQUETAS","SCENES":"ESCENAS","CHANGES":"CAMBIOS",
+ "Object Info":"Información del objeto","Outliner":"Estructura del modelo","Materials":"Materiales","Components":"Componentes","Tags":"Etiquetas","Scenes":"Escenas","Changes":"Cambios",
+ "Default":"Predeterminado","Opacity":"Opacidad","Add color":"Añadir color","+ Add color":"+ Añadir color","Add texture":"Añadir textura","Save to Library":"Guardar en biblioteca","Choose color":"Elegir color","Name…":"Nombre…","Name...":"Nombre…","Filter materials…":"Filtrar materiales…","Filter materials...":"Filtrar materiales…","Filter outliner…":"Filtrar estructura…","Filter outliner...":"Filtrar estructura…",
+ "No component definitions in this document.":"Este documento no contiene componentes.",
+ "No Scenes yet. Add Scene saves the current camera, visibility, and section cut.":"Aún no hay escenas. Añadir escena guarda la cámara, la visibilidad y el corte actuales.",
+ "Add Scene":"Añadir escena",
  "Paint":"Pintar","Select":"Seleccionar","Push/Pull":"Empujar/tirar","Line":"Línea","Rectangle":"Rectángulo","Circle":"Círculo","Move":"Mover"
  }))text=text===en?es:text.replaceAll(en.length>25?en:'\u0000',es);return text;};
  const walk=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);
  while(walk.nextNode()){const node=walk.currentNode;if(node.parentElement?.closest('script,style,textarea,input,[contenteditable]'))continue;const next=rename(node.nodeValue);if(next!==node.nodeValue)node.nodeValue=next;}
- for(const element of root.querySelectorAll?.('[title],[aria-label],[alt]')||[]){for(const attr of ['title','aria-label','alt']){const value=element.getAttribute(attr);if(value){const next=attr==='aria-label'?value.replace(/\bHew\b|\bHEW\b/g,'REVERA'):rename(value);if(next!==value)element.setAttribute(attr,next);}}}
+ for(const element of root.querySelectorAll?.('[title],[aria-label],[alt],[placeholder]')||[]){for(const attr of ['title','aria-label','alt','placeholder']){const value=element.getAttribute(attr);if(value){const next=attr==='aria-label'?value.replace(/\bHew\b|\bHEW\b/g,'REVERA'):rename(value);if(next!==value)element.setAttribute(attr,next);}}}
 }
 window.reveraInstall=(deps,createScene)=>{
  const settingsStyle=document.createElement('style');settingsStyle.textContent='button[title^="Settings"]{width:auto!important;min-width:54px!important;padding:4px 9px!important;font-size:11px!important}button[title^="Settings"] svg{display:none!important}button[title^="Settings"]:after{content:"Ajustes";color:var(--text-primary,#c7d9e3)}';settingsStyle.textContent+='body.revera-erasing canvas{cursor:crosshair!important}body.revera-erasing .hew-dock button[title="Borrar caras"]{background:#674d37!important;color:#ffe0c3!important}div:has(> .revera-document-name){position:static!important;left:auto!important;transform:none!important;margin-left:14px;max-width:180px!important;min-width:0;flex:0 1 180px;gap:0!important}div:has(> .revera-document-name)>span:not(.revera-document-name){display:none!important}.revera-document-name{font-size:11px!important}div:has(> .revera-document-name)>span{white-space:nowrap}.hew-dock{max-width:calc(100% - 90px);overflow-x:auto;gap:4px!important}.hew-dock>button{flex-shrink:0;min-width:62px}button[title="Archivo"],button[title="Editar"]{white-space:nowrap}@media(max-width:1100px){div:has(> .revera-document-name){display:none!important}}';document.head.append(settingsStyle);
