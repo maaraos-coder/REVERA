@@ -17,7 +17,7 @@ class Handler(BaseHTTPRequestHandler):
   if not self.origin(): return self.send_json(403,{'error':'Origen no permitido.'})
   self.send_response(204);self.send_header('Access-Control-Allow-Origin',self.origin());self.send_header('Access-Control-Allow-Methods','POST, GET, OPTIONS');self.send_header('Access-Control-Allow-Headers','Content-Type, Authorization');self.send_header('Vary','Origin');self.end_headers()
  def do_GET(self):
-  if self.path=='/health': return self.send_json(200,{'engine':'SPPS 2.2.1','available':Path(os.environ.get('SPPS_BINARY','/opt/spps/native/spps/spps')).is_file()})
+  if self.path=='/health': return self.send_json(200,{'engine':'SPPS 2.2.1','apiVersion':2,'supportedBands':[125,250,500,1000,2000,4000,8000],'available':Path(os.environ.get('SPPS_BINARY','/opt/spps/native/spps/spps')).is_file()})
   return self.send_json(404,{'error':'Ruta no encontrada.'})
  def do_POST(self):
   if self.path!='/simulate': return self.send_json(404,{'error':'Ruta no encontrada.'})
@@ -39,4 +39,5 @@ class Handler(BaseHTTPRequestHandler):
   except (RuntimeError,FileNotFoundError): self.send_json(502,{'error':'SPPS no pudo completar el cálculo. Revisa el motor y la geometría.'})
   finally: LOCK.release()
 if __name__=='__main__':
+ print('REVERA SPPS API v2: room parameters and maps enabled',flush=True)
  ThreadingHTTPServer(('0.0.0.0',int(os.environ.get('PORT','8080'))),Handler).serve_forever()
