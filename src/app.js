@@ -1,3 +1,4 @@
+import {defaultSimulation,normalizeSimulation,isInsideRoom,createSimulationJob} from './simulation.js';
 import {calculateTcr} from './tcr.js';
 import {assignFaceDefaults} from './face-defaults.js';
 import {acousticSummary} from './acoustic-summary.js';
@@ -6,6 +7,7 @@ import {demoFaces,prepare} from './geometry.js';
 import {editorCall,encodeBytes,roomCommands} from './editor-client.js';
 import {parseDxf} from './dxf.js';
 const $=id=>document.getElementById(id);
+let simulation=defaultSimulation(),editingPoint=null;
 let reviewedHash=null,calculated=false,orientationOverrides=new Set();
 let model=null,result=null,mode='editor',busy=false,editorReady=false,lastEditorHash=null;
 const worker=new Worker(new URL('./geometry-worker.js',import.meta.url),{type:'module'});
@@ -60,6 +62,7 @@ function draw(){
  projectedFaces=projected;
  for(const {f,loops} of projected){const selected=selectedFace&&faceKey(f)===faceKey(selectedFace);ctx.beginPath();for(const loop of loops){loop.forEach((p,j)=>j?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.closePath();}ctx.fillStyle=selected?'rgba(255,166,61,.82)':acoustic?(f.orientation==='F'?'rgba(230,115,85,.55)':'rgba(94,192,160,.38)'):'rgba(112,144,170,.32)';ctx.fill('evenodd');ctx.strokeStyle=selected?'#ffe4aa':acoustic?'#81d9b8':'#9db1c3';ctx.lineWidth=selected?3:acoustic?1.3:.8;ctx.stroke();if(acoustic&&f.orientation){const p=project(f.centroid);ctx.fillStyle=f.orientation==='D'?'#b8ffe3':'#ffb09a';ctx.font='bold 13px Segoe UI';ctx.fillText(`${faceProperties[faceKey(f)]?.name||f.id} · ${f.orientation}`,p[0],p[1]);}}
 
+ for(const [kind,items] of Object.entries(simulation)){for(const item of items){const p=project(item.position);ctx.fillStyle=kind==='sources'?'#ffb35d':'#70d9ff';ctx.strokeStyle='#101925';ctx.lineWidth=2;ctx.beginPath();ctx.arc(p[0],p[1],6,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.font='bold 12px Segoe UI';ctx.fillText(item.name,p[0]+10,p[1]-8);}}
  ctx.fillStyle='#abc0ce';ctx.font='11px Segoe UI';ctx.fillText('Z ↑ · unidades: metros',18,h-42);
 }
 async function syncModel(name){
@@ -106,18 +109,19 @@ $('invertAcousticFace').onclick=()=>action(async()=>{if(!selectedFace||!result)r
 for(const view of ['drawing','architecture','acoustic'])$(view).onclick=()=>{mode=view==='drawing'?'editor':view;renderResult();draw();};
 $('roof').onchange=draw;$('fit').onclick=()=>{zoom=1;yaw=-.8;pitch=.55;draw();};
 for(const id of ['sx','sy','sz','surfaceOnly'])$(id).oninput=()=>{if(result){result=null;mode='architecture';renderResult();message('Cambió el punto interior. Genera nuevamente el modelo acústico.');}draw();};
-$('save').onclick=()=>action(async()=>{await syncModel(model?.name);download(new Blob([JSON.stringify({format:'revera',version:2,model,faceProperties,orientationOverrides:[...orientationOverrides],thickModel:$('thickModel').checked,seed:seed()},null,2)],{type:'application/json'}),'proyecto.revera');persist();message('Proyecto descargado con el dibujo actual del editor.');});
+$('save').onclick=()=>action(async()=>{await syncModel(model?.name);download(new Blob([JSON.stringify({format:'revera',version:2,model,faceProperties,simulation,orientationOverrides:[...orientationOverrides],thickModel:$('thickModel').checked,seed:seed()},null,2)],{type:'application/json'}),'proyecto.revera');persist();message('Proyecto descargado con el dibujo actual del editor.');});
 async function restoreProject(data){
  if(data.format!=='revera'||![1,2].includes(data.version)||!Array.isArray(data.model?.faces)||!Array.isArray(data.seed)||data.seed.length!==3)throw Error('Proyecto REVERA inválido.');
  if(data.model.faces.length>5000)throw Error('El proyecto supera el límite de 5.000 caras.');
+ const restoredSimulation=normalizeSimulation(data.simulation);
  const checked=await compute('validate',{faces:data.model.faces,seed:data.seed});
  if(data.model.editor_bytes){const state=await editorCall('ping');if((state.objects||state.sketches)&&!confirm('Recuperar el proyecto reemplaza el dibujo actual. ¿Continuar?'))return;await editorCall('load',{bytes:data.model.editor_bytes});}
- orientationOverrides=new Set(Array.isArray(data.orientationOverrides)?data.orientationOverrides:[]);$('thickModel').checked=!!data.thickModel;faceProperties=data.faceProperties&&typeof data.faceProperties==='object'?data.faceProperties:{};$('surfaceOnly').checked=!!data.model.surfaceOnly;load({...data.model,faces:checked.faces});['sx','sy','sz'].forEach((id,k)=>$(id).value=data.seed[k]);renderResult();draw();message(data.model.editor_bytes?'Proyecto y dibujo recuperados. Genera la envolvente para validar nuevamente.':'Proyecto del prototipo anterior: geometría recuperada para consulta; importa el dibujo editable original para seguir dibujando.');
+ simulation=restoredSimulation;renderSimulation();orientationOverrides=new Set(Array.isArray(data.orientationOverrides)?data.orientationOverrides:[]);$('thickModel').checked=!!data.thickModel;faceProperties=data.faceProperties&&typeof data.faceProperties==='object'?data.faceProperties:{};$('surfaceOnly').checked=!!data.model.surfaceOnly;load({...data.model,faces:checked.faces});['sx','sy','sz'].forEach((id,k)=>$(id).value=data.seed[k]);renderResult();draw();message(data.model.editor_bytes?'Proyecto y dibujo recuperados. Genera la envolvente para validar nuevamente.':'Proyecto del prototipo anterior: geometría recuperada para consulta; importa el dibujo editable original para seguir dibujando.');
 }
 $('project').onchange=event=>action(async()=>{const file=event.target.files[0];if(file.size>48*1024*1024)throw Error('Proyecto demasiado grande.');await restoreProject(JSON.parse(await file.text()));});
 $('saveHew').onclick=()=>action(async()=>{const {bytes}=await editorCall('save');download(new Blob([Uint8Array.from(atob(bytes),c=>c.charCodeAt(0))],{type:'application/octet-stream'}),'modelo.hew');message('Dibujo editable descargado.');});
 function download(blob,name){const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
-function persist(){try{localStorage.setItem('revera-project-v2',JSON.stringify({format:'revera',version:2,model,faceProperties,orientationOverrides:[...orientationOverrides],thickModel:$('thickModel').checked,seed:seed()}));$('localStatus').textContent='Última extracción guardada en este navegador';}catch{$('localStatus').textContent='Descarga el proyecto para conservarlo: espacio local insuficiente';}}
+function persist(){try{localStorage.setItem('revera-project-v2',JSON.stringify({format:'revera',version:2,model,faceProperties,simulation,orientationOverrides:[...orientationOverrides],thickModel:$('thickModel').checked,seed:seed()}));$('localStatus').textContent='Última extracción guardada en este navegador';}catch{$('localStatus').textContent='Descarga el proyecto para conservarlo: espacio local insuficiente';}}
 $('restoreLocal').onclick=()=>action(async()=>{const data=localStorage.getItem('revera-project-v2');if(!data)throw Error('Todavía no hay un proyecto guardado en este navegador.');await restoreProject(JSON.parse(data));});
 canvas.onpointerdown=e=>{drag={x:e.clientX,y:e.clientY,startX:e.clientX,startY:e.clientY,moved:false};canvas.setPointerCapture(e.pointerId);};
 canvas.onpointermove=e=>{if(!drag)return;yaw-=(e.clientX-drag.x)*.008;pitch=Math.max(-1.4,Math.min(1.4,pitch+(e.clientY-drag.y)*.008));drag={...drag,x:e.clientX,y:e.clientY,moved:drag.moved||Math.hypot(e.clientX-drag.startX,e.clientY-drag.startY)>5};draw();};
@@ -158,8 +162,8 @@ window.addEventListener('revera-face-mode',()=>{setEraseState(false);faceSelecti
 // Compact project rail: panels overlay the drawing instead of shrinking it.
 const railButtons=[...document.querySelectorAll('[data-project]')],projectGroups=[...$('projectPanel').querySelectorAll(':scope > details.control-group')];
 let activeProject=0;
-const projectTitles=['Importar modelo','Sala de prueba','Modelo acústico','Guardar y recuperar'];
-function showProject(index){setResults(false);const alreadyOpen=!document.body.classList.contains('panel-hidden')&&activeProject===index;if(document.body.classList.contains('focus-mode'))setFocus(false);activeProject=index;projectGroups.forEach((group,i)=>{group.hidden=i!==index;group.open=i===index;});$('projectPanel').querySelector('h1').textContent=projectTitles[index];setPanelHidden(alreadyOpen);}
+const projectTitles=['Importar modelo','Sala de prueba','Modelo acústico','Guardar y recuperar','Fuentes y receptores'];
+function showProject(index){setResults(false);const alreadyOpen=!document.body.classList.contains('panel-hidden')&&activeProject===index;if(document.body.classList.contains('focus-mode'))setFocus(false);activeProject=index;projectGroups.forEach((group,i)=>{group.hidden=i!==index;group.open=i===index;});$('projectPanel').querySelector('h1').textContent=projectTitles[index];setPanelHidden(alreadyOpen);railButtons.forEach((button,i)=>button.setAttribute('aria-expanded',String(!alreadyOpen&&i===index)));}
 railButtons.forEach(button=>button.onclick=()=>showProject(Number(button.dataset.project)));
 const panelState=new MutationObserver(()=>{const open=!document.body.classList.contains('panel-hidden')&&!document.body.classList.contains('focus-mode');railButtons.forEach((button,i)=>button.setAttribute('aria-expanded',String(open&&i===activeProject)));});
 panelState.observe(document.body,{attributes:true,attributeFilter:['class']});
@@ -218,3 +222,30 @@ function renderTcr(host,summary){
  for(const [label,key] of [['α media','meanAlpha'],['A Eyring · m²','aEyring'],['TR Sabine · s','trSabine'],['TR Eyring · s','trEyring']]){const row=body.insertRow();[label,...report.bands.map(b=>format(b[key]))].forEach(v=>row.insertCell().textContent=v);}
  section.append(table);const save=document.createElement('button');save.className='secondary';save.textContent='Descargar resultados TCR';save.onclick=()=>{const exportData=JSON.parse(JSON.stringify(report,(_,v)=>typeof v==='number'&&!Number.isFinite(v)?'Infinity':v));download(new Blob([JSON.stringify(exportData,null,2)],{type:'application/json'}),'revera-tcr.json');};section.append(save);host.append(section);
 }
+
+// Source/receiver data are separate from editable geometry and face inspection.
+for(const band of bands){const label=document.createElement('label');label.textContent=band+' Hz';const input=document.createElement('input');input.id='simPower'+band;input.type='number';input.step='any';input.min=-100;input.max=200;input.required=true;label.append(input);$('simPowerInputs').append(label);}
+function setSimulationKind(){const source=$('simKind').value==='sources';$('simPowerGroup').hidden=!source;bands.forEach(b=>$('simPower'+b).required=source);}
+$('simKind').onchange=setSimulationKind;
+function resetPointForm(){editingPoint=null;$('simulationForm').reset();$('simKind').disabled=false;$('simSubmit').textContent='Añadir punto';$('simCancel').hidden=true;setSimulationKind();}
+$('simCancel').onclick=resetPointForm;
+function renderSimulation(){
+ const host=$('simList');host.replaceChildren();
+ for(const [kind,items] of Object.entries(simulation))for(const item of items){
+  const row=document.createElement('div');row.className='simulation-point';const text=document.createElement('span');text.textContent=`${kind==='sources'?'F':'R'} · ${item.name} (${item.position.join('; ')})`;row.append(text);
+  const edit=document.createElement('button');edit.type='button';edit.className='text-button';edit.textContent='Editar';edit.setAttribute('aria-label','Editar '+item.name);edit.onclick=()=>{editingPoint={kind,id:item.id};$('simKind').value=kind;$('simKind').disabled=true;$('simName').value=item.name;['X','Y','Z'].forEach((k,i)=>$('sim'+k).value=item.position[i]);bands.forEach((b,i)=>$('simPower'+b).value=item.power?.[i]??'');$('simSubmit').textContent='Guardar punto';$('simCancel').hidden=false;setSimulationKind();};
+  const remove=document.createElement('button');remove.type='button';remove.className='text-button';remove.textContent='Eliminar';remove.setAttribute('aria-label','Eliminar '+item.name);remove.onclick=()=>{simulation[kind]=items.filter(x=>x.id!==item.id);resetPointForm();renderSimulation();persist();draw();};row.append(edit,remove);host.append(row);
+ }
+}
+$('simulationForm').onsubmit=e=>{e.preventDefault();try{
+ if(!result?.valid)throw Error('Revisa primero la orientación y el cierre del recinto.');
+ const kind=$('simKind').value,position=['X','Y','Z'].map(k=>Number($('sim'+k).value));if(!isInsideRoom(result,position))throw Error('Coloca el punto dentro del recinto, separado de las caras.');
+ const old=editingPoint&&simulation[kind].find(x=>x.id===editingPoint.id);let number=1;while(simulation[kind].some(x=>x.name===`${kind==='sources'?'Fuente':'Receptor'} ${number}`))number++;
+ const item={id:old?.id||`p-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,10)}`,name:$('simName').value.trim()||`${kind==='sources'?'Fuente':'Receptor'} ${number}`,position};if(kind==='sources')item.power=bands.map(b=>Number($('simPower'+b).value));
+ const next={...simulation,[kind]:old?simulation[kind].map(x=>x.id===old.id?item:x):[...simulation[kind],item]};simulation=normalizeSimulation(next);resetPointForm();renderSimulation();persist();mode='acoustic';renderResult();draw();$('simStatus').textContent='Punto guardado. Naranja: fuentes; celeste: receptores. SPPS aún no ejecutado.';
+ }catch(error){$('simStatus').textContent=error.message;}};
+$('simExport').onclick=()=>action(async()=>{
+ const state=await editorCall('ping');if(!result?.valid||state.hash!==reviewedHash)throw Error('Revisa nuevamente el recinto: el dibujo debe estar actualizado.');
+ const job=createSimulationJob(result,faceProperties,simulation);download(new Blob([JSON.stringify(job,null,2)],{type:'application/json'}),'revera-spps-datos.json');$('simStatus').textContent=`Datos preparados: ${job.sources.length} fuentes y ${job.receivers.length} receptores. ${job.provisionalFaces} caras con α provisional. Es un archivo de intercambio REVERA, no un resultado SPPS.`;
+});
+setSimulationKind();renderSimulation();

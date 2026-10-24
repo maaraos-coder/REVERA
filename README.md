@@ -87,3 +87,9 @@ Después de **Revisar orientación y cierre** y **Calcular recinto validado**, a
 `src/tcr.js` adapta al navegador las funciones globales de TCR de I-Simpa v1.3.4, commit `a0d4d4330d8c9894d31ce80e0fd3a9a1d4b872cb`. Usa la constante original 0,163 y las áreas, volumen y α de REVERA. No incluye absorción atmosférica, propagación espacial, receptores ni SPPS. No ejecuta el programa nativo completo. La fuente de referencia, licencia GPL-3.0-or-later y notas están en `vendor/isimpa-tcr` y se incluyen en la distribución y el archivo de fuentes.
 
 Las pruebas verifican una sala de 6 × 4 × 3 m (72 m³, 108 m²): con α = 0,20, TR Sabine = 0,543333 s. Si hay un compilador C++ disponible, también se contrasta el resultado con la función original `Get_TR_` compilada, sin modificar su cuerpo.
+
+## Fuentes y receptores
+
+El panel **Fuentes / receptores** permite añadir, editar y eliminar puntos en metros, con nombres automáticos. Cada fuente omnidireccional necesita potencia sonora Lw en las seis bandas (125–4000 Hz); los receptores solo requieren posición. Se rechazan puntos sobre las caras o fuera del recinto convexo validado. La vista Acústico muestra fuentes naranjas y receptores celestes. Los puntos se incluyen en el proyecto `.revera` y en la recuperación local; proyectos antiguos sin puntos siguen abriendo.
+
+**Preparar datos para SPPS** descarga `revera-spps-datos.json`: un formato de intercambio REVERA con geometría, absorción y puntos. Valida que el dibujo coincida con la revisión, que existan fuentes/receptores y que ninguna pareja coincida. El archivo NO es una entrada nativa ni un resultado SPPS. Faltan el adaptador XML/CBIN/MBIN, el mallado tetraédrico, la difusión y el servicio de ejecución. El motor original no se ha compilado ni conectado en esta entrega.
