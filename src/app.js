@@ -7,7 +7,7 @@ import {demoFaces,prepare} from './geometry.js';
 import {editorCall,encodeBytes,roomCommands} from './editor-client.js';
 import {parseDxf} from './dxf.js';
 const $=id=>document.getElementById(id);
-let simulation=defaultSimulation(),editingPoint=null;
+let simulation=defaultSimulation(),editingPoint=null,lastSpps=null;
 let reviewedHash=null,calculated=false,orientationOverrides=new Set();
 let model=null,result=null,mode='editor',busy=false,editorReady=false,lastEditorHash=null;
 const worker=new Worker(new URL('./geometry-worker.js',import.meta.url),{type:'module'});
@@ -19,7 +19,7 @@ const canvas=$('view'),ctx=canvas.getContext('2d');
 let eraseSelection=false;
 let selectedFace=null,faceProperties={},projectedFaces=[],faceSelection=false;
 let yaw=-.8,pitch=.55,zoom=1,drag=null;
-const controls=['orientFaces','calculateRoom','demo','extract','file','project','save','sync','saveHew','faceMode','eraseFaces'];
+const controls=['runSpps','simExport','orientFaces','calculateRoom','demo','extract','file','project','save','sync','saveHew','faceMode','eraseFaces'];
 function message(text,error=false){$('message').textContent=text;$('message').style.borderColor=error?'#edab77':'#80cbb4';}
 async function action(fn){if(busy)return;busy=true;controls.forEach(id=>$(id).disabled=true);try{await fn();}catch(e){message(e.message,true);}finally{busy=false;controls.forEach(id=>$(id).disabled=false);$('save').disabled=!editorReady;$('extract').disabled=!editorReady;$('calculateRoom').disabled=!result?.valid;$('orientFaces').disabled=!result||result.orientation_valid;}}
 function load(data){calculated=false;clearFace();model=data;result=null;mode='architecture';zoom=1;$('modelName').textContent=data.name;renderResult();message(data.warnings?.join(' ')||'Modelo cargado. Revisa la orientación D/F y el cierre del recinto.');draw();}
@@ -203,7 +203,7 @@ function renderAbsorption(){
  if(!summary){host.textContent='Valida un recinto cerrado para calcular la absorción.';return;}
  const note=document.createElement('p');note.textContent=`Absorción equivalente A = Σ(S × α). ${summary.complete?'Todas las caras tienen coeficientes.':`Resultado parcial: faltan coeficientes en ${summary.missingArea.toFixed(2)} m².`} ${summary.provisionalCount?`${summary.provisionalCount} caras usan α provisional = 0,05; reemplázalo por datos del material real.`:''} Los colores del dibujo no asignan absorción.`;host.append(note);
  const table=document.createElement('table'),head=table.createTHead().insertRow();['Banda · Hz',...summary.bands].forEach(v=>{const th=document.createElement('th');th.textContent=v;head.append(th);});const row=table.createTBody().insertRow();['A · m² equivalentes'+(summary.complete?'':' (parcial)'),...summary.equivalent.map(v=>v.toFixed(2))].forEach(v=>row.insertCell().textContent=v);host.append(table);
- renderTcr(host,summary);
+ renderTcr(host,summary);renderSpps(host);
  const details=document.createElement('p');details.textContent=summary.faces.map(f=>`${f.id}: ${f.area.toFixed(2)} m² · ${f.material}${f.alpha?'':' · α pendiente'}`).join(' | ');host.append(details);
 }
 
@@ -234,18 +234,44 @@ function renderSimulation(){
  for(const [kind,items] of Object.entries(simulation))for(const item of items){
   const row=document.createElement('div');row.className='simulation-point';const text=document.createElement('span');text.textContent=`${kind==='sources'?'F':'R'} · ${item.name} (${item.position.join('; ')})`;row.append(text);
   const edit=document.createElement('button');edit.type='button';edit.className='text-button';edit.textContent='Editar';edit.setAttribute('aria-label','Editar '+item.name);edit.onclick=()=>{editingPoint={kind,id:item.id};$('simKind').value=kind;$('simKind').disabled=true;$('simName').value=item.name;['X','Y','Z'].forEach((k,i)=>$('sim'+k).value=item.position[i]);bands.forEach((b,i)=>$('simPower'+b).value=item.power?.[i]??'');$('simSubmit').textContent='Guardar punto';$('simCancel').hidden=false;setSimulationKind();};
-  const remove=document.createElement('button');remove.type='button';remove.className='text-button';remove.textContent='Eliminar';remove.setAttribute('aria-label','Eliminar '+item.name);remove.onclick=()=>{simulation[kind]=items.filter(x=>x.id!==item.id);resetPointForm();renderSimulation();persist();draw();};row.append(edit,remove);host.append(row);
+  const remove=document.createElement('button');remove.type='button';remove.className='text-button';remove.textContent='Eliminar';remove.setAttribute('aria-label','Eliminar '+item.name);remove.onclick=()=>{simulation[kind]=items.filter(x=>x.id!==item.id);resetPointForm();renderSimulation();persist();renderResult();draw();};row.append(edit,remove);host.append(row);
  }
 }
-$('simulationForm').onsubmit=e=>{e.preventDefault();try{
+$('simulationForm').onsubmit=e=>{e.preventDefault();if(busy)return;try{
  if(!result?.valid)throw Error('Revisa primero la orientación y el cierre del recinto.');
  const kind=$('simKind').value,position=['X','Y','Z'].map(k=>Number($('sim'+k).value));if(!isInsideRoom(result,position))throw Error('Coloca el punto dentro del recinto, separado de las caras.');
  const old=editingPoint&&simulation[kind].find(x=>x.id===editingPoint.id);let number=1;while(simulation[kind].some(x=>x.name===`${kind==='sources'?'Fuente':'Receptor'} ${number}`))number++;
  const item={id:old?.id||`p-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,10)}`,name:$('simName').value.trim()||`${kind==='sources'?'Fuente':'Receptor'} ${number}`,position};if(kind==='sources')item.power=bands.map(b=>Number($('simPower'+b).value));
- const next={...simulation,[kind]:old?simulation[kind].map(x=>x.id===old.id?item:x):[...simulation[kind],item]};simulation=normalizeSimulation(next);resetPointForm();renderSimulation();persist();mode='acoustic';renderResult();draw();$('simStatus').textContent='Punto guardado. Naranja: fuentes; celeste: receptores. SPPS aún no ejecutado.';
+ const next={...simulation,[kind]:old?simulation[kind].map(x=>x.id===old.id?item:x):[...simulation[kind],item]};simulation=normalizeSimulation(next);resetPointForm();renderSimulation();persist();mode='acoustic';renderResult();draw();$('simStatus').textContent='Punto guardado. Naranja: fuentes; celeste: receptores. Listo para calcular con SPPS.';
  }catch(error){$('simStatus').textContent=error.message;}};
 $('simExport').onclick=()=>action(async()=>{
  const state=await editorCall('ping');if(!result?.valid||state.hash!==reviewedHash)throw Error('Revisa nuevamente el recinto: el dibujo debe estar actualizado.');
  const job=createSimulationJob(result,faceProperties,simulation);download(new Blob([JSON.stringify(job,null,2)],{type:'application/json'}),'revera-spps-datos.json');$('simStatus').textContent=`Datos preparados: ${job.sources.length} fuentes y ${job.receivers.length} receptores. ${job.provisionalFaces} caras con α provisional. Es un archivo de intercambio REVERA, no un resultado SPPS.`;
 });
 setSimulationKind();renderSimulation();
+
+function currentSimulationJob(){return createSimulationJob(result,faceProperties,simulation);}
+try{$('sppsEndpoint').value=localStorage.getItem('revera-spps-endpoint')||'';}catch{}
+$('runSpps').onclick=()=>action(async()=>{try{
+ const endpoint=$('sppsEndpoint').value.trim().replace(/\/$/,'');if(!endpoint)throw Error('Configura la URL del servidor SPPS en Fuentes / receptores.');
+ const url=new URL(endpoint);if(url.protocol!=='https:'&&!(['localhost','127.0.0.1'].includes(url.hostname)&&url.protocol==='http:'))throw Error('El servidor debe usar HTTPS.');
+ const state=await editorCall('ping');if(state.hash!==reviewedHash)throw Error('El dibujo cambió. Revisa nuevamente el recinto.');
+ const job=currentSimulationJob(),signature=JSON.stringify(job),headers={'Content-Type':'application/json'};if($('sppsToken').value)headers.Authorization='Bearer '+$('sppsToken').value;
+ try{localStorage.setItem('revera-spps-endpoint',endpoint);}catch{}
+ $('simStatus').textContent='SPPS está calculando. Puede tardar hasta 90 segundos…';
+ const response=await fetch(endpoint+'/simulate',{method:'POST',headers,body:signature,signal:AbortSignal.timeout(100000)});let data;try{data=await response.json();}catch{throw Error('El servidor no devolvió un resultado JSON válido.');}
+ if(!response.ok)throw Error(data.error||'El servidor no pudo calcular.');
+ if(data.format!=='revera-spps-results'||data.status!=='calculated'||!Array.isArray(data.receivers))throw Error('Respuesta de SPPS no compatible.');
+ const latest=await editorCall('ping');if(latest.hash!==reviewedHash||JSON.stringify(currentSimulationJob())!==signature)throw Error('El proyecto cambió durante el cálculo. Ejecuta nuevamente SPPS.');
+ lastSpps={signature,data};calculated=true;mode='acoustic';renderResult();draw();setResults(true);$('simStatus').textContent='SPPS completado. Los niveles por receptor aparecen en Ver superficies.';message('SPPS nativo completado: resultados por receptor disponibles.');
+}catch(error){$('simStatus').textContent='SPPS no calculado: '+error.message;throw error;}
+});
+function renderSpps(host){
+ if(!lastSpps)return;let signature;try{signature=JSON.stringify(currentSimulationJob());}catch{return;}
+ if(signature!==lastSpps.signature)return;
+ const data=lastSpps.data,section=document.createElement('section');section.className='tcr-results';const title=document.createElement('h3');title.textContent='SPPS · Nivel por receptor';section.append(title);
+ const note=document.createElement('p');note.textContent=`SPL sin ponderación A, integrado hasta ${data.settings.duration} s. ${data.settings.particlesPerSourcePerBand} partículas por fuente y banda. Reflexión especular; difusión cero; sin absorción atmosférica. ${data.provisionalFaces||0} caras con α provisional.`;section.append(note);
+ const table=document.createElement('table'),header=table.insertRow();['Receptor',...bands.map(b=>b+' Hz · dB')].forEach(t=>header.insertCell().textContent=t);
+ for(const receiver of data.receivers){const row=table.insertRow();row.insertCell().textContent=receiver.name;for(const frequency of bands){const value=receiver.bands?.find(b=>b.frequency===frequency)?.spl;row.insertCell().textContent=Number.isFinite(value)?value.toFixed(2):'Sin energía registrada';}}
+ section.append(table);const save=document.createElement('button');save.className='secondary';save.textContent='Descargar resultados SPPS';save.onclick=()=>download(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),'revera-spps-resultados.json');section.append(save);host.append(section);
+}

@@ -1,0 +1,22 @@
+name: SPPS native verification
+on:
+  push:
+    paths: ['server/**', '.github/workflows/spps.yml']
+  pull_request:
+    paths: ['server/**', '.github/workflows/spps.yml']
+jobs:
+  native:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install native build dependencies
+        run: sudo apt-get update && sudo apt-get install -y cmake g++ libboost-filesystem-dev libboost-regex-dev libboost-random-dev libboost-thread-dev libboost-test-dev libboost-timer-dev
+      - name: Fetch pinned upstream release
+        run: git clone --depth 1 --branch v1.3.4 https://github.com/Universite-Gustave-Eiffel/I-Simpa.git /tmp/isimpa
+      - name: Build native core and run upstream tests
+        run: python3 server/build-spps.py --source /tmp/isimpa --build /tmp/spps
+      - name: Verify adapter, free field, power scaling and HTTP API
+        env:
+          SPPS_BINARY: /tmp/spps/native/spps/spps
+        run: python3 -m unittest discover -s server/tests -v

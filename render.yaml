@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: revera-spps
+    runtime: docker
+    dockerfilePath: ./server/Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: ALLOWED_ORIGINS
+        value: https://revera-ebon.vercel.app
+      - key: SPPS_API_TOKEN
+        sync: false

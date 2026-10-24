@@ -37,6 +37,6 @@ function zip(files){let offset=0;const entries=[],central=[];
  const c=Buffer.alloc(46);c.writeUInt32LE(0x02014b50);c.writeUInt16LE(20,4);c.writeUInt16LE(20,6);c.writeUInt32LE(crc,16);c.writeUInt32LE(bytes.length,20);c.writeUInt32LE(bytes.length,24);c.writeUInt16LE(name.length,28);c.writeUInt32LE(offset,42);central.push(c,name);offset+=h.length+name.length+bytes.length;
  }const directory=Buffer.concat(central),end=Buffer.alloc(22);end.writeUInt32LE(0x06054b50);end.writeUInt16LE(files.length,8);end.writeUInt16LE(files.length,10);end.writeUInt32LE(directory.length,12);end.writeUInt32LE(offset,16);return Buffer.concat([...entries,directory,end]);
 }
-const files=[...walk(path.join(root,'vendor','isimpa-tcr')),...walk(path.join(root,'src')),...walk(path.join(root,'tests')),...['build.mjs','localize-editor.mjs','package.json','README.md','LICENSE','vercel.json'].map(n=>path.join(root,n)).filter(p=>fs.existsSync(p))];
+const files=[...walk(path.join(root,'server')).filter(p=>!p.includes('__pycache__')&&!p.endsWith('.pyc')),...walk(path.join(root,'vendor','isimpa-tcr')),...walk(path.join(root,'src')),...walk(path.join(root,'tests')),...['build.mjs','localize-editor.mjs','package.json','README.md','LICENSE','vercel.json','render.yaml'].map(n=>path.join(root,n)).filter(p=>fs.existsSync(p))];
 fs.writeFileSync(path.join(source,'revera-web-source.zip'),zip(files));
 console.log('REVERA web compiled to dist/ · frontend + Hew WASM + geometry worker');

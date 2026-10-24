@@ -58,3 +58,5 @@ tr[aria-selected=true]{background:#754621;color:#fff2d5}tr[aria-selected=true] t
 .simulation-point{display:flex;flex-wrap:wrap;gap:4px;align-items:center;padding:9px 0;border-bottom:1px solid #2b4054}.simulation-point span{width:100%;overflow-wrap:anywhere}#simList{margin:14px 0}#simulationForm .inputs{grid-template-columns:repeat(3,minmax(0,1fr))}#simulationForm input{min-width:0;width:100%;box-sizing:border-box}
 
 #simulationForm input{background:#0b1722;color:#d5e4ec;border:1px solid #354b5b;border-radius:4px;padding:8px}#simulationForm label{display:block;margin:7px 0}#simulationForm button{margin-top:8px}.simulation-point .text-button{width:auto;min-height:28px;margin:0;padding:4px 9px}
+
+.spps-connection label{display:block;margin:10px 0}.spps-connection input{display:block;box-sizing:border-box;width:100%;min-width:0;margin-top:5px;padding:9px;background:#0b1722;border:1px solid #354b5b;border-radius:4px;color:#d5e4ec}
