@@ -36,6 +36,8 @@ class AdapterTests(unittest.TestCase):
   for item in self.job['sources']+self.job['receivers']:item['position']=[x+500000 for x in item['position']]
   with tempfile.TemporaryDirectory() as folder:
    report=write_native(self.job,folder);self.assertAlmostEqual(report['volume'],72);self.assertGreater(report['coordinateOrigin'][0],500000)
+ def test_actual_editor_export_welds_shared_edges(self):
+  job=json.loads(FIXTURE.with_name('editor-room.json').read_text());nodes,triangles,tetra,volume=prepare(job);self.assertAlmostEqual(volume,72);self.assertEqual(len(tetra),24)
  def test_invalid_gabe_rejected(self):
   with tempfile.TemporaryDirectory() as folder:
    p=Path(folder)/'test';p.write_bytes(b'bad')

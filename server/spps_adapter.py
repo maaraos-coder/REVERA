@@ -20,8 +20,9 @@ def prepare(job):
  if sum(len(f.get('outer',[])) for f in faces)>4096: raise ValueError('El adaptador admite hasta 4096 vértices de contorno.')
  def vertex(p):
   if not finite(p,3) or max(map(abs,p))>1e6: raise ValueError('Coordenadas no válidas.')
-  key=tuple(p)
-  if key not in lookup: lookup[key]=len(nodes);nodes.append(list(p))
+  # Canonicalize sub-nanometre exporter noise so shared edges use one node.
+  key=tuple(round(float(x),8) for x in p)
+  if key not in lookup: lookup[key]=len(nodes);nodes.append(list(key))
   return lookup[key]
  for index,face in enumerate(faces):
   outer=face.get('outer',[])
