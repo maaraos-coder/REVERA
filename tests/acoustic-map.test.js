@@ -1,3 +1,5 @@
-import test from 'node:test';import assert from 'node:assert/strict';import {extract,demoFaces} from '../src/geometry.js';import {mapGrid,sectionPolygon,mapValue} from '../src/acoustic-map.js';
+import test from 'node:test';import assert from 'node:assert/strict';import {extract,demoFaces} from '../src/geometry.js';import {mapGrid,sectionPolygon,mapValue,mapDomain} from '../src/acoustic-map.js';
 test('receiver grid covers closed room section without sampling walls',()=>{const room=extract(demoFaces(),[3,2,1.5]),grid=mapGrid(room,[],1.2,3);assert.equal(grid.cells.length,9);assert.equal(sectionPolygon(room,1.2,grid.lo,grid.hi).length,4);assert.throws(()=>mapGrid(room,[],5,3));});
 test('map uses actual channel values and never invents unavailable STI',()=>{const r={bands:[{frequency:500,spl:70}],bySource:[{sourceId:'f',bands:[{frequency:500,parameters:{C50:2,T20:{seconds:1.2}}}],sti:{value:null}}]};assert.equal(mapValue(r,'SPL',500),70);assert.equal(mapValue(r,'T20',500,'f'),1.2);assert.equal(mapValue(r,'STI',500,'f'),null);});
+
+test('STI color legend stays fixed at 0–1 while SPL follows data',()=>{assert.deepEqual(mapDomain([.45,.72],'STI'),{min:0,max:1});assert.deepEqual(mapDomain([55,68],'SPL'),{min:55,max:68});assert.deepEqual(mapDomain([null,NaN],'C80'),{min:0,max:1});});

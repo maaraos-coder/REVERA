@@ -1,4 +1,4 @@
-import {mapGrid,sectionPolygon,mapValue,colorScale} from './acoustic-map.js';
+import {mapGrid,sectionPolygon,mapValue,colorScale,mapDomain} from './acoustic-map.js';
 import {defaultSimulation,normalizeSimulation,isInsideRoom,createSimulationJob} from './simulation.js';
 import {calculateTcr} from './tcr.js';
 import {assignFaceDefaults} from './face-defaults.js';
@@ -123,7 +123,7 @@ async function restoreProject(data){
 }
 $('project').onchange=event=>action(async()=>{const file=event.target.files[0];if(file.size>48*1024*1024)throw Error('Proyecto demasiado grande.');await restoreProject(JSON.parse(await file.text()));});
 $('saveHew').onclick=()=>action(async()=>{const {bytes}=await editorCall('save');download(new Blob([Uint8Array.from(atob(bytes),c=>c.charCodeAt(0))],{type:'application/octet-stream'}),'modelo.hew');message('Dibujo editable descargado.');});
-function download(blob,name){const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+function download(blob,name){const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);}
 function persist(){try{localStorage.setItem('revera-project-v2',JSON.stringify({format:'revera',version:2,model,faceProperties,simulation,orientationOverrides:[...orientationOverrides],thickModel:$('thickModel').checked,seed:seed()}));$('localStatus').textContent='Última extracción guardada en este navegador';}catch{$('localStatus').textContent='Descarga el proyecto para conservarlo: espacio local insuficiente';}}
 $('restoreLocal').onclick=()=>action(async()=>{const data=localStorage.getItem('revera-project-v2');if(!data)throw Error('Todavía no hay un proyecto guardado en este navegador.');await restoreProject(JSON.parse(data));});
 canvas.onpointerdown=e=>{drag={x:e.clientX,y:e.clientY,startX:e.clientX,startY:e.clientY,moved:false};canvas.setPointerCapture(e.pointerId);};
@@ -297,11 +297,22 @@ $('calculateMap').onclick=()=>action(async()=>{try{
  const latest=await editorCall('ping');if(latest.hash!==reviewedHash||buildMap().signature!==signature)throw Error('El proyecto cambió durante el cálculo.');lastMap={grid,data,signature};const select=$('mapSource');select.replaceChildren();for(const source of simulation.sources){const option=document.createElement('option');option.value=source.id;option.textContent=source.name;select.append(option);}mode='map';calculated=true;renderResult();draw();setPanelHidden(true);$('simStatus').textContent='Mapa completado: '+grid.cells.length+' receptores calculados.';message('Mapa calculado por SPPS. Cada celda corresponde a un receptor.');
 }catch(error){$('simStatus').textContent=error.message;throw error;}});
 $('mapView').onclick=()=>{mode='map';renderResult();draw();};for(const id of ['mapMetric','mapBand','mapSource'])$(id).onchange=draw;
-$('saveMap').onclick=()=>canvas.toBlob(blob=>{if(blob)download(blob,'revera-mapa.png');else message('No se pudo exportar el mapa.',true);},'image/png');
+$('saveMap').onclick=()=>action(async()=>{
+ if(mode!=='map'||!lastMap)throw Error('Primero calcula y abre un mapa acústico.');
+ if(buildMap().signature!==lastMap.signature)throw Error('El modelo cambió. Recalcula el mapa antes de exportar.');
+ drawMap();
+ const snapshot=document.createElement('canvas');snapshot.width=canvas.width;snapshot.height=canvas.height;
+ if(!snapshot.width||!snapshot.height)throw Error('El mapa no tiene dimensiones válidas.');
+ const copy=snapshot.getContext('2d');if(!copy)throw Error('No se pudo preparar la imagen del mapa.');
+ copy.drawImage(canvas,0,0);
+ const blob=await new Promise((resolve,reject)=>snapshot.toBlob(value=>value?.type==='image/png'&&value.size>100?resolve(value):reject(Error('No se pudo generar un PNG válido.')),'image/png'));
+ download(blob,'revera-mapa-'+$('mapMetric').value.toLowerCase()+'.png');
+ message('Mapa acústico exportado a PNG.');
+});
 function drawMap(){
  const ratio=devicePixelRatio||1,w=canvas.clientWidth,h=canvas.clientHeight;canvas.width=w*ratio;canvas.height=h*ratio;ctx.setTransform(ratio,0,0,ratio,0,0);ctx.fillStyle='#101c29';ctx.fillRect(0,0,w,h);projectedFaces=[];
  if(!lastMap)return;try{if(buildMap().signature!==lastMap.signature)throw Error();}catch{ctx.fillStyle='#ffbc80';ctx.font='16px Segoe UI';ctx.fillText('El proyecto cambió. Calcula nuevamente el mapa.',25,50);return;}
- const {grid,data}=lastMap,metric=$('mapMetric').value,frequency=Number($('mapBand').value),source=$('mapSource').value,values=grid.cells.map(c=>mapValue(data.receivers.find(r=>r.id===c.id),metric,frequency,source)),valid=values.filter(Number.isFinite),min=valid.length?Math.min(...valid):0,max=valid.length?Math.max(...valid):1;
+ const {grid,data}=lastMap,metric=$('mapMetric').value,frequency=Number($('mapBand').value),source=$('mapSource').value,values=grid.cells.map(c=>mapValue(data.receivers.find(r=>r.id===c.id),metric,frequency,source)),valid=values.filter(Number.isFinite),{min,max}=mapDomain(values,metric);
  const sx=grid.hi[0]-grid.lo[0],sy=grid.hi[1]-grid.lo[1],scale=Math.max(1,Math.min((w-100)/sx,(h-150)/sy)),ox=(w-sx*scale)/2,oy=70,xy=p=>[ox+(p[0]-grid.lo[0])*scale,oy+(grid.hi[1]-p[1])*scale];
  const polygon=sectionPolygon(result,grid.z,grid.lo,grid.hi);ctx.save();ctx.beginPath();polygon.forEach((p,i)=>{const q=xy(p);i?ctx.lineTo(...q):ctx.moveTo(...q);});ctx.closePath();ctx.clip();
  grid.cells.forEach((c,i)=>{const p=xy([c.x,c.y+c.dy]);ctx.fillStyle=colorScale(values[i],min,max);ctx.fillRect(...p,c.dx*scale,c.dy*scale);ctx.strokeStyle='#ffffff55';ctx.strokeRect(...p,c.dx*scale,c.dy*scale);const q=xy(c.position);ctx.fillStyle='#fff';ctx.font='bold 14px Segoe UI';ctx.textAlign='center';ctx.fillText(Number.isFinite(values[i])?values[i].toFixed(metric==='STI'?2:1):'—',q[0],q[1]);});ctx.restore();ctx.textAlign='left';ctx.fillStyle='#d5e8f1';ctx.font='bold 16px Segoe UI';ctx.fillText(`${metric}${metric==='STI'?' estimado':` · ${frequency} Hz`}${['SPL','C50','C80'].includes(metric)?' · dB':metric==='D50'?' · %':metric==='Ts'?' · ms':['EDT','T20','T30'].includes(metric)?' · s':''} · altura ${grid.z} m`,22,30);ctx.font='12px Segoe UI';ctx.fillText(`Malla ${grid.n}×${grid.n} · valores discretos · 5000 partículas/fuente/banda · ${data.provisionalFaces||0} caras con α provisional · azul=mínimo, rojo=máximo`,22,h-45);if(valid.length){for(let i=0;i<240;i++){ctx.fillStyle=colorScale(min+(max-min)*i/239,min,max);ctx.fillRect(w-270+i,h-65,1,12);}ctx.fillStyle='#d5e8f1';}

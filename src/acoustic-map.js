@@ -24,3 +24,11 @@ export function mapValue(receiver,metric,frequency,sourceId){
  const value=band.parameters?.[metric];return ['EDT','T20','T30'].includes(metric)?value?.seconds??null:value??null;
 }
 export function colorScale(value,min,max){if(!Number.isFinite(value))return '#334658';const t=Math.max(0,Math.min(1,(value-min)/(max-min||1)));return `hsl(${240-240*t} 85% 55%)`;}
+
+// STI uses a fixed physical scale so color comparisons stay meaningful across rooms.
+export function mapDomain(values,metric){
+ if(metric==='STI')return {min:0,max:1};
+ const valid=values.filter(Number.isFinite);
+ if(!valid.length)return {min:0,max:1};
+ return {min:Math.min(...valid),max:Math.max(...valid)};
+}
