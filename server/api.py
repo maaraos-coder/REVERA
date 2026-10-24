@@ -31,7 +31,9 @@ class Handler(BaseHTTPRequestHandler):
   try:
    self.connection.settimeout(20);job=json.loads(self.rfile.read(length));
    if not isinstance(job,dict): raise ValueError('Se requiere un proyecto de simulación.')
-   result=run_job(job);self.send_json(200,result)
+   duration=job.get('duration',1.0)
+   if not isinstance(duration,(int,float)) or not .5<=duration<=5: raise ValueError('Duración permitida: 0,5–5 segundos.')
+   result=run_job(job,duration=duration,particles=5000 if job.get('mapMode') is True else 12000);self.send_json(200,result)
   except (ValueError,KeyError,TypeError,OverflowError) as e: self.send_json(400,{'error':str(e)})
   except subprocess.TimeoutExpired: self.send_json(504,{'error':'El cálculo superó los 90 segundos.'})
   except (RuntimeError,FileNotFoundError): self.send_json(502,{'error':'SPPS no pudo completar el cálculo. Revisa el motor y la geometría.'})

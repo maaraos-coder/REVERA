@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Read upstream GABE v2 punctual receiver output (float32 bands)."""
 import math,struct
+from .room_parameters import descriptors,sti_estimate
 from pathlib import Path
 
 def read_gabe(path):
@@ -23,11 +24,11 @@ def read_gabe(path):
   columns.append({'label':label,'values':values,'kind':kind})
  return columns
 
-def receiver_result(path,item,timestep):
+def receiver_result(path,item,timestep,frequencies=None):
  cols=read_gabe(path);bands=[]
  for col in cols:
   if col['kind']!=50: continue
   frequency=int(col['label'].split()[0]);values=col['values'];total=sum(values)
-  bands.append({'frequency':frequency,'meanSquarePressure':total,'spl':10*math.log10(total/(20e-6)**2) if total>0 else None,'timeStep':timestep,'response':values})
- if [b['frequency'] for b in bands]!=[125,250,500,1000,2000,4000]: raise ValueError('SPPS no devolvió las seis bandas.')
- return {'id':item['id'],'name':item['name'],'position':item['position'],'bands':bands}
+  bands.append({'frequency':frequency,'meanSquarePressure':total,'spl':10*math.log10(total/(20e-6)**2) if total>0 else None,'timeStep':timestep,'response':values,'parameters':descriptors(values,timestep)})
+ if [b['frequency'] for b in bands]!=(frequencies or [125,250,500,1000,2000,4000]): raise ValueError('SPPS no devolvió las seis bandas.')
+ return {'id':item['id'],'name':item['name'],'position':item['position'],'bands':bands,'sti':sti_estimate(bands)}

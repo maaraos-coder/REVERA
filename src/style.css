@@ -60,3 +60,5 @@ tr[aria-selected=true]{background:#754621;color:#fff2d5}tr[aria-selected=true] t
 #simulationForm input{background:#0b1722;color:#d5e4ec;border:1px solid #354b5b;border-radius:4px;padding:8px}#simulationForm label{display:block;margin:7px 0}#simulationForm button{margin-top:8px}.simulation-point .text-button{width:auto;min-height:28px;margin:0;padding:4px 9px}
 
 .spps-connection label{display:block;margin:10px 0}.spps-connection input{display:block;box-sizing:border-box;width:100%;min-width:0;margin-top:5px;padding:9px;background:#0b1722;border:1px solid #354b5b;border-radius:4px;color:#d5e4ec}
+
+.map-controls{display:flex;flex-wrap:wrap;gap:12px;padding:6px 10px;background:#102332}.map-controls[hidden]{display:none}.map-controls label{font-size:12px}.map-controls select{margin-left:5px}.room-parameters{padding:12px 0;border-top:1px solid #365062}.room-parameters summary{cursor:pointer;font-weight:bold}#simDuration,#mapHeight{box-sizing:border-box;width:100%;padding:8px;background:#0b1722;color:#d5e4ec;border:1px solid #354b5b}

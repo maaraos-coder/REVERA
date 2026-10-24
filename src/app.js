@@ -1,3 +1,4 @@
+import {mapGrid,sectionPolygon,mapValue,colorScale} from './acoustic-map.js';
 import {defaultSimulation,normalizeSimulation,isInsideRoom,createSimulationJob} from './simulation.js';
 import {calculateTcr} from './tcr.js';
 import {assignFaceDefaults} from './face-defaults.js';
@@ -7,7 +8,7 @@ import {demoFaces,prepare} from './geometry.js';
 import {editorCall,encodeBytes,roomCommands} from './editor-client.js';
 import {parseDxf} from './dxf.js';
 const $=id=>document.getElementById(id);
-let simulation=defaultSimulation(),editingPoint=null,lastSpps=null;
+let simulation=defaultSimulation(),editingPoint=null,lastSpps=null,lastMap=null;
 let reviewedHash=null,calculated=false,orientationOverrides=new Set();
 let model=null,result=null,mode='editor',busy=false,editorReady=false,lastEditorHash=null;
 const worker=new Worker(new URL('./geometry-worker.js',import.meta.url),{type:'module'});
@@ -19,17 +20,18 @@ const canvas=$('view'),ctx=canvas.getContext('2d');
 let eraseSelection=false;
 let selectedFace=null,faceProperties={},projectedFaces=[],faceSelection=false;
 let yaw=-.8,pitch=.55,zoom=1,drag=null;
-const controls=['runSpps','simExport','orientFaces','calculateRoom','demo','extract','file','project','save','sync','saveHew','faceMode','eraseFaces'];
+const controls=['calculateMap','runSpps','simExport','orientFaces','calculateRoom','demo','extract','file','project','save','sync','saveHew','faceMode','eraseFaces'];
 function message(text,error=false){$('message').textContent=text;$('message').style.borderColor=error?'#edab77':'#80cbb4';}
 async function action(fn){if(busy)return;busy=true;controls.forEach(id=>$(id).disabled=true);try{await fn();}catch(e){message(e.message,true);}finally{busy=false;controls.forEach(id=>$(id).disabled=false);$('save').disabled=!editorReady;$('extract').disabled=!editorReady;$('calculateRoom').disabled=!result?.valid;$('orientFaces').disabled=!result||result.orientation_valid;}}
 function load(data){calculated=false;clearFace();model=data;result=null;mode='architecture';zoom=1;$('modelName').textContent=data.name;renderResult();message(data.warnings?.join(' ')||'Modelo cargado. Revisa la orientación D/F y el cierre del recinto.');draw();}
 function renderResult(){
+ $('mapView').disabled=!lastMap;$('mapView').setAttribute('aria-pressed',String(mode==='map'));$('mapControls').hidden=mode!=='map';
  $('calculateRoom').disabled=busy||!result?.valid;
  $('orientFaces').disabled=busy||!result||result.orientation_valid;
  $('reviewStatus').textContent=!result?'Pendiente de revisión.':result.valid?'Validado: todas las caras D y envolvente cerrada.':result.errors.join(' ');
  renderAbsorption();
  $('drawing').setAttribute('aria-pressed',String(mode==='editor'));
- $('editor').hidden=mode!=='editor';canvas.hidden=mode==='editor';$('canvasLabels').hidden=mode==='editor';
+ $('editor').hidden=mode!=='editor';canvas.hidden=mode==='editor';$('canvasLabels').hidden=mode==='editor'||mode==='map';
  $('architecture').setAttribute('aria-pressed',String(mode==='architecture'));
  $('acoustic').setAttribute('aria-pressed',String(mode==='acoustic'));
  $('acoustic').disabled=!result;
@@ -45,6 +47,7 @@ function seed(){return ['sx','sy','sz'].map(id=>Number($(id).value));}
 function bounds(){const points=model?.faces.flatMap(f=>f.outer)||[[0,0,0],[6,4,3]];const lo=[0,1,2].map(k=>points.reduce((v,p)=>Math.min(v,p[k]),Infinity)),hi=[0,1,2].map(k=>points.reduce((v,p)=>Math.max(v,p[k]),-Infinity));return {center:lo.map((v,k)=>(v+hi[k])/2),size:Math.max(...hi.map((v,k)=>v-lo[k]),1)};}
 function draw(){
  if(mode==='editor')return;
+ if(mode==='map'){drawMap();return;}
  const ratio=devicePixelRatio||1,w=canvas.clientWidth,h=canvas.clientHeight;
  if(canvas.width!==w*ratio||canvas.height!==h*ratio){canvas.width=w*ratio;canvas.height=h*ratio;}
  ctx.setTransform(ratio,0,0,ratio,0,0);ctx.clearRect(0,0,w,h);
@@ -149,10 +152,10 @@ $('resultsToggle').onclick=()=>setResults($('resultsPanel').hidden);
 $('resultsClose').onclick=()=>setResults(false);
 
 function clearFace(){$('invertAcousticFace').hidden=true;selectedFace=null;$('facePanel').hidden=true;}
-function selectFace(face){$('invertAcousticFace').hidden=!face?.orientation;selectedFace=face;$('facePanel').hidden=!face;if(!face)return;const data=faceProperties[faceKey(face)]||{};$('faceGeometry').textContent=`${face.id} · ${face.area.toFixed(3)} m² · ${face.orientation?'Orientación '+face.orientation+' · ':''}Normal: ${face.normal.map(v=>v.toFixed(2)).join(', ')}`;$('faceName').value=data.name||face.name||face.id;$('faceMaterial').value=data.material||'';$('alphaNotice').textContent=data.provisional?'α = 0,05 provisional en todas las bandas. Selecciona o introduce el material real antes de usar los resultados.':'Coeficientes guardados por el usuario.';bands.forEach((band,i)=>$('alpha'+band).value=data.alpha?.[i]??'');for(const row of $('faces').rows)row.setAttribute('aria-selected',String(row.cells[0]?.textContent===face.id));}
+function selectFace(face){$('invertAcousticFace').hidden=!face?.orientation;selectedFace=face;$('facePanel').hidden=!face;if(!face)return;const data=faceProperties[faceKey(face)]||{};$('faceGeometry').textContent=`${face.id} · ${face.area.toFixed(3)} m² · ${face.orientation?'Orientación '+face.orientation+' · ':''}Normal: ${face.normal.map(v=>v.toFixed(2)).join(', ')}`;$('faceName').value=data.name||face.name||face.id;$('faceMaterial').value=data.material||'';$('alphaNotice').textContent=data.provisional?'α = 0,05 provisional en todas las bandas. Selecciona o introduce el material real antes de usar los resultados.':'Coeficientes guardados por el usuario.';bands.forEach((band,i)=>$('alpha'+band).value=data.alpha?.[i]??'');$('alpha8000').value=data.alpha8000??'';for(const row of $('faces').rows)row.setAttribute('aria-selected',String(row.cells[0]?.textContent===face.id));}
 for(const band of bands){const label=document.createElement('label');label.textContent=band+' Hz';const input=document.createElement('input');input.id='alpha'+band;input.type='number';input.min=0;input.max=1;input.step=.01;input.placeholder='—';input.required=true;label.append(input);$('absorptionInputs').append(label);}
 $('faceClose').onclick=()=>{clearFace();draw();if(faceSelection)editorCall('face-mode',{enabled:true,faces:model?.faces||[]}).catch(()=>{});};
-$('faceForm').onsubmit=e=>{e.preventDefault();if(!selectedFace)return;try{const alpha=absorption(bands.map(b=>Number($('alpha'+b).value)));faceProperties[faceKey(selectedFace)]={name:$('faceName').value.trim(),material:$('faceMaterial').value.trim(),alpha,provisional:false};persist();renderAbsorption();renderResult();draw();message('Propiedades guardadas para esta cara. Descarga el proyecto REVERA para conservarlas con el dibujo.');}catch(error){message(error.message,true);}};
+$('faceForm').onsubmit=e=>{e.preventDefault();if(!selectedFace)return;try{const alpha=absorption(bands.map(b=>Number($('alpha'+b).value)));faceProperties[faceKey(selectedFace)]={name:$('faceName').value.trim(),material:$('faceMaterial').value.trim(),alpha,alpha8000:$('alpha8000').value===''?null:Number($('alpha8000').value),provisional:false};persist();renderAbsorption();renderResult();draw();message('Propiedades guardadas para esta cara. Descarga el proyecto REVERA para conservarlas con el dibujo.');}catch(error){message(error.message,true);}};
 $('faceMode').onclick=()=>action(async()=>{if(eraseSelection){await editorCall('erase-mode',{enabled:false});setEraseState(false);}if(faceSelection){await editorCall('face-mode',{enabled:false});faceSelection=false;}else{message('Preparando selección de superficies…');const data=await syncModel(model?.name);await editorCall('face-mode',{enabled:true,faces:data.faces});faceSelection=true;mode='editor';renderResult();message('Haz clic en una cara para consultar su área y editar sus propiedades acústicas. Para modificar el dibujo, vuelve a Seleccionar y pulsa Supr sobre la cara elegida.');}clearFace();$('faceMode').setAttribute('aria-pressed',String(faceSelection));});
 window.addEventListener('revera-face',e=>selectFace(e.detail));
 window.addEventListener('revera-face-stale',()=>{clearFace();message('Cambió el dibujo. Desactiva y vuelve a activar Propiedades de cara para actualizarlo.',true);});
@@ -233,7 +236,7 @@ function renderSimulation(){
  const host=$('simList');host.replaceChildren();
  for(const [kind,items] of Object.entries(simulation))for(const item of items){
   const row=document.createElement('div');row.className='simulation-point';const text=document.createElement('span');text.textContent=`${kind==='sources'?'F':'R'} · ${item.name} (${item.position.join('; ')})`;row.append(text);
-  const edit=document.createElement('button');edit.type='button';edit.className='text-button';edit.textContent='Editar';edit.setAttribute('aria-label','Editar '+item.name);edit.onclick=()=>{editingPoint={kind,id:item.id};$('simKind').value=kind;$('simKind').disabled=true;$('simName').value=item.name;['X','Y','Z'].forEach((k,i)=>$('sim'+k).value=item.position[i]);bands.forEach((b,i)=>$('simPower'+b).value=item.power?.[i]??'');$('simSubmit').textContent='Guardar punto';$('simCancel').hidden=false;setSimulationKind();};
+  const edit=document.createElement('button');edit.type='button';edit.className='text-button';edit.textContent='Editar';edit.setAttribute('aria-label','Editar '+item.name);edit.onclick=()=>{editingPoint={kind,id:item.id};$('simKind').value=kind;$('simKind').disabled=true;$('simName').value=item.name;['X','Y','Z'].forEach((k,i)=>$('sim'+k).value=item.position[i]);bands.forEach((b,i)=>$('simPower'+b).value=item.power?.[i]??'');$('simPower8000').value=item.power8000??'';$('simSubmit').textContent='Guardar punto';$('simCancel').hidden=false;setSimulationKind();};
   const remove=document.createElement('button');remove.type='button';remove.className='text-button';remove.textContent='Eliminar';remove.setAttribute('aria-label','Eliminar '+item.name);remove.onclick=()=>{simulation[kind]=items.filter(x=>x.id!==item.id);resetPointForm();renderSimulation();persist();renderResult();draw();};row.append(edit,remove);host.append(row);
  }
 }
@@ -241,7 +244,7 @@ $('simulationForm').onsubmit=e=>{e.preventDefault();if(busy)return;try{
  if(!result?.valid)throw Error('Revisa primero la orientación y el cierre del recinto.');
  const kind=$('simKind').value,position=['X','Y','Z'].map(k=>Number($('sim'+k).value));if(!isInsideRoom(result,position))throw Error('Coloca el punto dentro del recinto, separado de las caras.');
  const old=editingPoint&&simulation[kind].find(x=>x.id===editingPoint.id);let number=1;while(simulation[kind].some(x=>x.name===`${kind==='sources'?'Fuente':'Receptor'} ${number}`))number++;
- const item={id:old?.id||`p-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,10)}`,name:$('simName').value.trim()||`${kind==='sources'?'Fuente':'Receptor'} ${number}`,position};if(kind==='sources')item.power=bands.map(b=>Number($('simPower'+b).value));
+ const item={id:old?.id||`p-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,10)}`,name:$('simName').value.trim()||`${kind==='sources'?'Fuente':'Receptor'} ${number}`,position};if(kind==='sources'){item.power=bands.map(b=>Number($('simPower'+b).value));if($('simPower8000').value!=='')item.power8000=Number($('simPower8000').value);}
  const next={...simulation,[kind]:old?simulation[kind].map(x=>x.id===old.id?item:x):[...simulation[kind],item]};simulation=normalizeSimulation(next);resetPointForm();renderSimulation();persist();mode='acoustic';renderResult();draw();$('simStatus').textContent='Punto guardado. Naranja: fuentes; celeste: receptores. Listo para calcular con SPPS.';
  }catch(error){$('simStatus').textContent=error.message;}};
 $('simExport').onclick=()=>action(async()=>{
@@ -250,7 +253,7 @@ $('simExport').onclick=()=>action(async()=>{
 });
 setSimulationKind();renderSimulation();
 
-function currentSimulationJob(){return createSimulationJob(result,faceProperties,simulation);}
+function currentSimulationJob(){return {...createSimulationJob(result,faceProperties,simulation),duration:Number($('simDuration').value)};}
 try{$('sppsEndpoint').value=localStorage.getItem('revera-spps-endpoint')||'https://revera-spps.onrender.com';}catch{}
 $('runSpps').onclick=()=>action(async()=>{try{
  const endpoint=$('sppsEndpoint').value.trim().replace(/\/$/,'');if(!endpoint)throw Error('Configura la URL del servidor SPPS en Fuentes / receptores.');
@@ -271,7 +274,37 @@ function renderSpps(host){
  if(signature!==lastSpps.signature)return;
  const data=lastSpps.data,section=document.createElement('section');section.className='tcr-results';const title=document.createElement('h3');title.textContent='SPPS · Nivel por receptor';section.append(title);
  const note=document.createElement('p');note.textContent=`SPL sin ponderación A, integrado hasta ${data.settings.duration} s. ${data.settings.particlesPerSourcePerBand} partículas por fuente y banda. Reflexión especular; difusión cero; sin absorción atmosférica. ${data.provisionalFaces||0} caras con α provisional.`;section.append(note);
- const table=document.createElement('table'),header=table.insertRow();['Receptor',...bands.map(b=>b+' Hz · dB')].forEach(t=>header.insertCell().textContent=t);
- for(const receiver of data.receivers){const row=table.insertRow();row.insertCell().textContent=receiver.name;for(const frequency of bands){const value=receiver.bands?.find(b=>b.frequency===frequency)?.spl;row.insertCell().textContent=Number.isFinite(value)?value.toFixed(2):'Sin energía registrada';}}
- section.append(table);const save=document.createElement('button');save.className='secondary';save.textContent='Descargar resultados SPPS';save.onclick=()=>download(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),'revera-spps-resultados.json');section.append(save);host.append(section);
+ const table=document.createElement('table'),header=table.insertRow();['Receptor',...(data.bands||bands).map(b=>b+' Hz · dB')].forEach(t=>header.insertCell().textContent=t);
+ for(const receiver of data.receivers){const row=table.insertRow();row.insertCell().textContent=receiver.name;for(const frequency of data.bands||bands){const value=receiver.bands?.find(b=>b.frequency===frequency)?.spl;row.insertCell().textContent=Number.isFinite(value)?value.toFixed(2):'Sin energía registrada';}}
+ section.append(table);appendRoomParameters(section,data);const save=document.createElement('button');save.className='secondary';save.textContent='Descargar resultados SPPS';save.onclick=()=>download(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),'revera-spps-resultados.json');section.append(save);host.append(section);
+}
+
+for(const [host,id,title] of [['absorptionInputs','alpha8000','8000 Hz · STI'],['simPowerInputs','simPower8000','8000 Hz · STI']]){const label=document.createElement('label');label.textContent=title;const input=document.createElement('input');input.id=id;input.type='number';input.step='any';input.min=id==='alpha8000'?0:-100;input.max=id==='alpha8000'?1:200;label.append(input);$(host).append(label);}
+function appendRoomParameters(host,data){
+ for(const receiver of data.receivers)for(const channel of receiver.bySource||[]){
+  const details=document.createElement('details');details.className='room-parameters';const summary=document.createElement('summary');summary.textContent=`Parámetros · ${channel.sourceName} → ${receiver.name}`;details.append(summary);
+  const sti=document.createElement('p');sti.textContent=Number.isFinite(channel.sti?.value)?`STI estimado (solo reverberación): ${channel.sti.value.toFixed(3)}. Sin ruido de fondo ni enmascaramiento auditivo; no acredita conformidad IEC.`:channel.sti?.reason||'STI no evaluable.';details.append(sti);
+  const note=document.createElement('p');note.textContent='Ventanas desde la primera llegada registrada. —: no evaluable (energía, duración o ajuste insuficientes). Valores estimados desde partículas.';details.append(note);
+  const table=document.createElement('table'),head=table.insertRow();['Hz','C50 · dB','C80 · dB','D50 · %','Ts · ms','EDT · s','T20 · s','T30 · s'].forEach(v=>head.insertCell().textContent=v);
+  for(const b of channel.bands){const p=b.parameters||{},row=table.insertRow();[b.frequency,p.C50,p.C80,p.D50,p.Ts,p.EDT?.seconds,p.T20?.seconds,p.T30?.seconds].forEach((v,i)=>row.insertCell().textContent=Number.isFinite(v)?i===0?String(v):v.toFixed(2):'—');}
+  details.append(table);if(channel.bands.some(b=>b.parameters?.warnings?.length)){const warning=document.createElement('p');warning.textContent='Hay bandas con cola temporal importante: aumenta la duración para reducir el sesgo.';details.append(warning);}host.append(details);
+ }
+}
+function buildMap(){const grid=mapGrid(result,simulation.sources,Number($('mapHeight').value),Number($('mapResolution').value));const job={...createSimulationJob(result,faceProperties,{...simulation,receivers:grid.cells.map(c=>({id:c.id,name:c.name,position:c.position}))}),duration:Number($('simDuration').value),mapMode:true};return {grid,job,signature:JSON.stringify(job)};}
+$('calculateMap').onclick=()=>action(async()=>{try{
+ const state=await editorCall('ping');if(state.hash!==reviewedHash)throw Error('El dibujo cambió. Revisa el recinto.');const {grid,job,signature}=buildMap();const endpoint=$('sppsEndpoint').value.trim().replace(/\/$/,'');const url=new URL(endpoint);if(url.protocol!=='https:'&&!(['localhost','127.0.0.1'].includes(url.hostname)&&url.protocol==='http:'))throw Error('El servidor debe usar HTTPS.');const headers={'Content-Type':'application/json'};if($('sppsToken').value)headers.Authorization='Bearer '+$('sppsToken').value;
+ $('simStatus').textContent=`Calculando ${grid.cells.length} receptores del mapa…`;const response=await fetch(endpoint+'/simulate',{method:'POST',headers,body:JSON.stringify(job),signal:AbortSignal.timeout(100000)});const data=await response.json();if(!response.ok)throw Error(data.error||'No se pudo calcular el mapa.');
+ const latest=await editorCall('ping');if(latest.hash!==reviewedHash||buildMap().signature!==signature)throw Error('El proyecto cambió durante el cálculo.');lastMap={grid,data,signature};const select=$('mapSource');select.replaceChildren();for(const source of simulation.sources){const option=document.createElement('option');option.value=source.id;option.textContent=source.name;select.append(option);}mode='map';calculated=true;renderResult();draw();setPanelHidden(true);message('Mapa calculado por SPPS. Cada celda corresponde a un receptor.');
+}catch(error){$('simStatus').textContent=error.message;throw error;}});
+$('mapView').onclick=()=>{mode='map';renderResult();draw();};for(const id of ['mapMetric','mapBand','mapSource'])$(id).onchange=draw;
+$('saveMap').onclick=()=>{const a=document.createElement('a');a.download='revera-mapa.png';a.href=canvas.toDataURL('image/png');a.click();};
+function drawMap(){
+ const ratio=devicePixelRatio||1,w=canvas.clientWidth,h=canvas.clientHeight;canvas.width=w*ratio;canvas.height=h*ratio;ctx.setTransform(ratio,0,0,ratio,0,0);ctx.fillStyle='#101c29';ctx.fillRect(0,0,w,h);projectedFaces=[];
+ if(!lastMap)return;try{if(buildMap().signature!==lastMap.signature)throw Error();}catch{ctx.fillStyle='#ffbc80';ctx.font='16px Segoe UI';ctx.fillText('El proyecto cambió. Calcula nuevamente el mapa.',25,50);return;}
+ const {grid,data}=lastMap,metric=$('mapMetric').value,frequency=Number($('mapBand').value),source=$('mapSource').value,values=grid.cells.map(c=>mapValue(data.receivers.find(r=>r.id===c.id),metric,frequency,source)),valid=values.filter(Number.isFinite),min=valid.length?Math.min(...valid):0,max=valid.length?Math.max(...valid):1;
+ const sx=grid.hi[0]-grid.lo[0],sy=grid.hi[1]-grid.lo[1],scale=Math.max(1,Math.min((w-100)/sx,(h-150)/sy)),ox=(w-sx*scale)/2,oy=70,xy=p=>[ox+(p[0]-grid.lo[0])*scale,oy+(grid.hi[1]-p[1])*scale];
+ const polygon=sectionPolygon(result,grid.z,grid.lo,grid.hi);ctx.save();ctx.beginPath();polygon.forEach((p,i)=>{const q=xy(p);i?ctx.lineTo(...q):ctx.moveTo(...q);});ctx.closePath();ctx.clip();
+ grid.cells.forEach((c,i)=>{const p=xy([c.x,c.y+c.dy]);ctx.fillStyle=colorScale(values[i],min,max);ctx.fillRect(...p,c.dx*scale,c.dy*scale);ctx.strokeStyle='#ffffff55';ctx.strokeRect(...p,c.dx*scale,c.dy*scale);const q=xy(c.position);ctx.fillStyle='#fff';ctx.font='bold 14px Segoe UI';ctx.textAlign='center';ctx.fillText(Number.isFinite(values[i])?values[i].toFixed(metric==='STI'?2:1):'—',q[0],q[1]);});ctx.restore();ctx.textAlign='left';ctx.fillStyle='#d5e8f1';ctx.font='bold 16px Segoe UI';ctx.fillText(`${metric}${metric==='STI'?' estimado':` · ${frequency} Hz`} · altura ${grid.z} m`,22,30);ctx.font='12px Segoe UI';ctx.fillText(`Malla ${grid.n}×${grid.n} · valores discretos · 5000 partículas/fuente/banda · azul=mínimo, rojo=máximo`,22,h-45);if(valid.length){for(let i=0;i<240;i++){ctx.fillStyle=colorScale(min+(max-min)*i/239,min,max);ctx.fillRect(w-270+i,h-65,1,12);}ctx.fillStyle='#d5e8f1';}
+ ctx.fillText(valid.length?`Escala ${min.toFixed(2)} — ${max.toFixed(2)} · ${metric==='STI'?'sin ruido ni enmascaramiento':''}`:'No evaluable: completa 8000 Hz para STI o aumenta la duración para los tiempos.',22,h-22);
+ for(const s of simulation.sources){const q=xy(s.position);ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(...q,5,0,2*Math.PI);ctx.fill();ctx.fillText(s.name,q[0]+8,q[1]-8);}
 }

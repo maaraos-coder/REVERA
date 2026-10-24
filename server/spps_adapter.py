@@ -13,7 +13,7 @@ def cross(a,b): return [a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b
 def mean(points): return [sum(p[k] for p in points)/len(points) for k in range(3)]
 def finite(values,n): return isinstance(values,list) and len(values)==n and all(isinstance(x,(int,float)) and not isinstance(x,bool) and math.isfinite(x) for x in values)
 def prepare(job):
- if job.get('format')!='revera-simulation-job' or job.get('version')!=1 or job.get('bands')!=BANDS: raise ValueError('Formato de simulación no compatible.')
+ if job.get('format')!='revera-simulation-job' or job.get('version')!=1 or job.get('bands') not in [BANDS,BANDS+[8000]]: raise ValueError('Formato de simulación no compatible.')
  faces=job.get('room',{}).get('faces',[])
  if not isinstance(faces,list) or not 4<=len(faces)<=256: raise ValueError('Número de caras no válido.')
  nodes=[];lookup={};triangles=[];normals=[]
@@ -37,7 +37,7 @@ def prepare(job):
   for a,b in zip(outer,outer[1:]+outer[:1]):
    if any(dot(cross(sub(b,a),sub(p,a)),n)<-1e-7 for p in outer): raise ValueError('La cara no es convexa.')
   alpha=face.get('alpha')
-  if not finite(alpha,6) or any(not 0<=x<=1 for x in alpha): raise ValueError('Absorción no válida.')
+  if not finite(alpha,len(job['bands'])) or any(not 0<=x<=1 for x in alpha): raise ValueError('Absorción no válida.')
   fc=vertex(mean(outer))
   for a,b in zip(ids,ids[1:]+ids[:1]): triangles.append((a,b,fc,index))
  center=mean(nodes)
@@ -49,7 +49,7 @@ def prepare(job):
   for item in items:
    pos=item.get('position')
    if not finite(pos,3) or any(dot(n,sub(pos,f['outer'][0]))<=1e-5 for f,n in zip(faces,normals)): raise ValueError('Fuente o receptor fuera del recinto.')
-   if kind=='sources' and (not finite(item.get('power'),6) or any(not -100<=x<=200 for x in item['power'])): raise ValueError('Lw no válido.')
+   if kind=='sources' and (not finite(item.get('power'),len(job['bands'])) or any(not -100<=x<=200 for x in item['power'])): raise ValueError('Lw no válido.')
  for s in job['sources']:
   for r in job['receivers']:
    if math.dist(s['position'],r['position'])<1e-4: raise ValueError('Fuente y receptor coincidentes.')
@@ -97,20 +97,20 @@ def write_native(job,directory,*,particles=20000,duration=1.0,timestep=.002,radi
  root=ET.Element('configuration',workingdirectory=str(directory)+'/')
  sim=ET.SubElement(root,'simulation',recepteurss_directory='surface/',recepteurss_filename='surface.csbin',recepteurss_cut_filename='cut.csbin',receiversp_directory='receivers',receiversp_filename='Sound level.recp',receiversp_filename_adv='Advanced.gap',cumul_filename='Total.recp',modelName='mesh.cbin',tetrameshFileName='tetramesh.mbin',abs_atmo_calc='0',enc_calc='0',trans_calc='0',direct_calc='0',duree_simulation=str(duration),output_recp_bysource='1',output_recs_byfreq='0',surf_receiv_method='0',random_seed='12345',computation_method='1',nbparticules=str(particles),nbparticules_rendu='0',pasdetemps=str(timestep),rayon_recepteurp=str(radius),trans_epsilon='5',intensity_filename='Intensity.rpi',intensity_folder='intensity',intensity_rp_filename='intensity.gabe',stats_filename='stats.gabe',particules_directory='particles/',particules_filename='particles.pbin',directivities_directory='',save_surface_intersection='0',save_receivers_intersection='0')
  freq=ET.SubElement(sim,'freq_enum')
- for band in BANDS: ET.SubElement(freq,'bfreq',freq=str(band),docalc='1')
+ for band in job['bands']: ET.SubElement(freq,'bfreq',freq=str(band),docalc='1')
  ET.SubElement(root,'condition_atmospherique',absatmo='0',disable_absatmo_computation='1',humidite='50',pression='101325',alog='0',blin='0',lst_soltype='1',z0='0.02',temperature='20')
  mats=ET.SubElement(root,'surface_absorption_enum')
  for i,face in enumerate(job['room']['faces']):
   mat=ET.SubElement(mats,'type_surface',id=str(i),resistivite='100',side_material='0')
-  for band,alpha in zip(BANDS,face['alpha']): ET.SubElement(mat,'bfreq',freq=str(band),absorb=str(alpha),diffusion='0',loi='0')
+  for band,alpha in zip(job['bands'],face['alpha']): ET.SubElement(mat,'bfreq',freq=str(band),absorb=str(alpha),diffusion='0',loi='0')
  sources=ET.SubElement(root,'sources')
  for i,item in enumerate(job['sources']):
   src=ET.SubElement(sources,'source',id=str(i),name=f'F{i+1:03d}',x=str(item['position'][0]-origin[0]),y=str(item['position'][1]-origin[1]),z=str(item['position'][2]-origin[2]),directivite='0',delay='0')
-  for band,power in zip(BANDS,item['power']): ET.SubElement(src,'bfreq',freq=str(band),db=str(power))
+  for band,power in zip(job['bands'],item['power']): ET.SubElement(src,'bfreq',freq=str(band),db=str(power))
  receivers=ET.SubElement(root,'recepteursp')
  for i,item in enumerate(job['receivers']):
   rec=ET.SubElement(receivers,'recepteur_ponctuel',id=str(i),name=f'R{i+1:03d}',lbl=f'R{i+1:03d}',x=str(item['position'][0]-origin[0]),y=str(item['position'][1]-origin[1]),z=str(item['position'][2]-origin[2]),u='1',v='0',w='0')
-  for band in BANDS: ET.SubElement(rec,'bfreq',freq=str(band),db='-200')
+  for band in job['bands']: ET.SubElement(rec,'bfreq',freq=str(band),db='-200')
  ET.SubElement(root,'recepteurss');ET.SubElement(root,'encombrement_enum')
  ET.ElementTree(root).write(directory/'config.xml',encoding='utf-8',xml_declaration=True)
  manifest={'engine':'I-Simpa SPPS 2.2.1','volume':volume,'coordinateOrigin':origin,'tetrahedra':len(tetra),'triangles':len(triangles),'reflection':'specular','diffusion':0,'atmosphericAbsorption':False,'sources':job['sources'],'receivers':job['receivers'],'provisionalFaces':sum(bool(f.get('provisional')) for f in job['room']['faces'])}

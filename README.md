@@ -97,3 +97,9 @@ El panel **Fuentes / receptores** permite añadir, editar y eliminar puntos en m
 ## SPPS nativo
 
 **Fuentes / receptores → Servidor de cálculo SPPS** permite configurar la URL del servicio Docker y su clave. **Calcular con SPPS** envía el proyecto, verifica que el dibujo siga actualizado y muestra SPL por receptor y banda, con descarga JSON. El servicio requiere publicación independiente; `render.yaml` prepara su configuración en Render. No se incluye una URL de servidor ficticia. Instrucciones, límites físicos y pruebas en `server/README.md`.
+
+## Parámetros de sala y mapas
+
+En los resultados SPPS, desplegar **Parámetros · Fuente → Receptor** para ver C50/C80, D50, Ts, EDT y T20/T30. STI aparece como estimación de reverberación cuando se completan α y Lw a 8000 Hz. No incluye ruido de fondo ni enmascaramiento auditivo.
+
+En **Fuentes / receptores**, elegir duración, altura y malla, y pulsar **Calcular mapa de colores**. La pestaña Mapas permite elegir banda y parámetro y descargar PNG. Cada celda representa un receptor nativo calculado, sin interpolación. Límites y criterios de validez en `server/README.md`.
