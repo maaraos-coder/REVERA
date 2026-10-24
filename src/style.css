@@ -52,3 +52,5 @@ aside#projectPanel{bottom:var(--summary-height);max-height:calc(100dvh - var(--h
 @media(max-width:1000px){.metrics{grid-template-columns:repeat(3,minmax(0,1fr));row-gap:8px}.metrics>div:nth-child(4){display:flex}.metrics>button{max-width:none}}
 
 tr[aria-selected=true]{background:#754621;color:#fff2d5}tr[aria-selected=true] td:first-child{color:#ffe0a1}
+
+.tcr-results{border-top:1px solid #3a5061;margin-top:12px;padding-top:8px}.tcr-results h3{font-size:12px;color:#d6ebe5;margin:4px 0}.tcr-warning{color:#ffce87}.tcr-results table{min-width:560px}.tcr-results{overflow-x:auto}

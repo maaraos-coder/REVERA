@@ -1,3 +1,4 @@
+import {calculateTcr} from './tcr.js';
 import {assignFaceDefaults} from './face-defaults.js';
 import {acousticSummary} from './acoustic-summary.js';
 import {faceKey,bands,absorption} from './face-selection.js';
@@ -198,9 +199,22 @@ function renderAbsorption(){
  if(!summary){host.textContent='Valida un recinto cerrado para calcular la absorción.';return;}
  const note=document.createElement('p');note.textContent=`Absorción equivalente A = Σ(S × α). ${summary.complete?'Todas las caras tienen coeficientes.':`Resultado parcial: faltan coeficientes en ${summary.missingArea.toFixed(2)} m².`} ${summary.provisionalCount?`${summary.provisionalCount} caras usan α provisional = 0,05; reemplázalo por datos del material real.`:''} Los colores del dibujo no asignan absorción.`;host.append(note);
  const table=document.createElement('table'),head=table.createTHead().insertRow();['Banda · Hz',...summary.bands].forEach(v=>{const th=document.createElement('th');th.textContent=v;head.append(th);});const row=table.createTBody().insertRow();['A · m² equivalentes'+(summary.complete?'':' (parcial)'),...summary.equivalent.map(v=>v.toFixed(2))].forEach(v=>row.insertCell().textContent=v);host.append(table);
+ renderTcr(host,summary);
  const details=document.createElement('p');details.textContent=summary.faces.map(f=>`${f.id}: ${f.area.toFixed(2)} m² · ${f.material}${f.alpha?'':' · α pendiente'}`).join(' | ');host.append(details);
 }
 
 // Panels stop above the complete result strip, including wrapped metrics.
 const summaryObserver=new ResizeObserver(()=>{const metrics=document.querySelector('.metrics');const footerHeight=metrics.getBoundingClientRect().height+$('message').getBoundingClientRect().height+16;document.documentElement.style.setProperty('--summary-height',`${Math.ceil(footerHeight)}px`);});
 summaryObserver.observe(document.querySelector('.metrics'));summaryObserver.observe($('message'));
+
+function renderTcr(host,summary){
+ const section=document.createElement('section');section.className='tcr-results';
+ const heading=document.createElement('h3');heading.textContent='Reverberación · TCR (Sabine / Eyring)';section.append(heading);
+ if(!summary.complete){const text=document.createElement('p');text.textContent='Completa los coeficientes de todas las caras para habilitar TCR.';section.append(text);host.append(section);return;}
+ const report=calculateTcr(result,faceProperties),description=document.createElement('p');description.textContent='Adaptación del cálculo global de I-Simpa 1.3.4. Sin absorción atmosférica. Hipótesis de campo difuso; no incluye propagación espacial ni SPPS.';section.append(description);
+ if(report.provisionalFaces){const warning=document.createElement('p');warning.className='tcr-warning';warning.textContent=`Estimación provisional: ${report.provisionalFaces} caras usan α inicial. Reemplaza esos valores por datos de los materiales antes de interpretar la reverberación.`;section.append(warning);}
+ const table=document.createElement('table'),head=table.createTHead().insertRow();['Banda · Hz',...report.bands.map(b=>b.frequency)].forEach(v=>{const th=document.createElement('th');th.textContent=v;head.append(th);});
+ const body=table.createTBody(),format=v=>Number.isFinite(v)?v.toFixed(3):'∞';
+ for(const [label,key] of [['α media','meanAlpha'],['A Eyring · m²','aEyring'],['TR Sabine · s','trSabine'],['TR Eyring · s','trEyring']]){const row=body.insertRow();[label,...report.bands.map(b=>format(b[key]))].forEach(v=>row.insertCell().textContent=v);}
+ section.append(table);const save=document.createElement('button');save.className='secondary';save.textContent='Descargar resultados TCR';save.onclick=()=>{const exportData=JSON.parse(JSON.stringify(report,(_,v)=>typeof v==='number'&&!Number.isFinite(v)?'Infinity':v));download(new Blob([JSON.stringify(exportData,null,2)],{type:'application/json'}),'revera-tcr.json');};section.append(save);host.append(section);
+}
