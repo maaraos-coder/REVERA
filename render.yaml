@@ -2,6 +2,7 @@ services:
   - type: web
     name: revera-spps
     runtime: docker
+    plan: free
     dockerfilePath: ./server/Dockerfile
     healthCheckPath: /health
     envVars:

@@ -251,7 +251,7 @@ $('simExport').onclick=()=>action(async()=>{
 setSimulationKind();renderSimulation();
 
 function currentSimulationJob(){return createSimulationJob(result,faceProperties,simulation);}
-try{$('sppsEndpoint').value=localStorage.getItem('revera-spps-endpoint')||'';}catch{}
+try{$('sppsEndpoint').value=localStorage.getItem('revera-spps-endpoint')||'https://revera-spps.onrender.com';}catch{}
 $('runSpps').onclick=()=>action(async()=>{try{
  const endpoint=$('sppsEndpoint').value.trim().replace(/\/$/,'');if(!endpoint)throw Error('Configura la URL del servidor SPPS en Fuentes / receptores.');
  const url=new URL(endpoint);if(url.protocol!=='https:'&&!(['localhost','127.0.0.1'].includes(url.hostname)&&url.protocol==='http:'))throw Error('El servidor debe usar HTTPS.');

@@ -6,7 +6,7 @@ Este servicio ejecuta el SPPS **original**, versión 2.2.1 incluida en I-Simpa v
 
 1. Publicar `render.yaml` como Blueprint del repositorio en Render, o crear un servicio Docker con `server/Dockerfile` y el contexto en la raíz del repositorio. Seleccionar el plan antes de crear el servicio.
 2. Definir `ALLOWED_ORIGINS` con el origen exacto de REVERA (por defecto en el Blueprint: `https://revera-ebon.vercel.app`). Para varios orígenes, separar por comas, sin espacios.
-3. Definir `SPPS_API_TOKEN` como clave propia del servicio. No se incluye ni se guarda una clave en el repositorio o en el proyecto acústico.
+3. Si se requiere acceso con clave, definir `SPPS_API_TOKEN` como clave propia del servicio. No se incluye ni se guarda una clave en el repositorio o en el proyecto acústico.
 4. Cuando `/health` muestre `available: true`, abrir **Fuentes / receptores → Servidor de cálculo SPPS** en REVERA. Introducir la URL HTTPS del servicio y la clave. La URL se recuerda localmente; la clave queda solo en memoria de la pestaña.
 5. Revisar el recinto y añadir fuentes/receptores. **Calcular con SPPS** envía el recinto y los materiales al servidor configurado. La tabla muestra SPL por banda y permite descargar respuesta temporal y parámetros en JSON.
 
@@ -39,3 +39,5 @@ API: `GET /health`, `POST /simulate` con el JSON `revera-simulation-job`. Si hay
 Se verificaron los lectores binarios originales mediante ejecución completa de SPPS, no mediante una simulación de su API. En una sala 6×4×3 m, paredes α=1 y Lw=80 dB, el SPL directo quedó a menos de 1 dB del campo libre analítico. Con la misma semilla, +10 dB de Lw produjo +10 dB en todas las bandas. La suite también comprueba el HTTP real, vecindad de tetraedros, volumen, rechazo de errores y traslado del origen.
 
 Los formatos CBIN, MBIN, XML y GABE se implementan a partir del código de I-Simpa: `src/lib_interface/input_output/bin.cpp`, `importExportMaillage/mbin.cpp`, `gabe/gabe.cpp`, `data_manager/base_core_configuration.cpp` y `src/spps`. El motor y este adaptador de servidor se distribuyen bajo GPL-3.0-or-later. Ver la licencia en `vendor/isimpa-tcr/LICENSE.md`. El Docker conserva el checkout completo de la fuente correspondiente en `/opt/isimpa`; la fuente pública exacta está en https://github.com/Universite-Gustave-Eiffel/I-Simpa/tree/a0d4d4330d8c9894d31ce80e0fd3a9a1d4b872cb .
+
+Servicio de prototipo creado en Render: `https://revera-spps.onrender.com`, Docker, plan Free. El frontend lo utiliza como URL predeterminada. El servicio creado desde repositorio público requiere despliegue manual para actualizar el motor; Vercel conserva el despliegue automático del frontend.
