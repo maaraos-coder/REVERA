@@ -35,6 +35,7 @@ function renderResult(){
  canvas.setAttribute('aria-label',mode==='map'?'Mapa acústico por receptores':'Vista tridimensional interactiva del modelo');$('mapView').disabled=!lastMap;$('mapView').setAttribute('aria-pressed',String(mode==='map'));$('mapControls').hidden=mode!=='map';
  $('calculateRoom').disabled=busy||!result?.valid;
  $('orientFaces').disabled=busy||!result||result.orientation_valid;
+ $('reviewStatus').dataset.state=!result?'pending':result.valid?'valid':'error';
  $('reviewStatus').textContent=!result?'Pendiente de revisión.':result.valid?'Validado: todas las caras D y envolvente cerrada. '+(result.warnings||[]).join(' '):result.errors.join(' ');
  renderAbsorption();
  $('drawing').setAttribute('aria-pressed',String(mode==='editor'));
@@ -122,6 +123,7 @@ async function reviewRoom(orient=true){
  const corrected=result.reversed_keys.length;message((corrected?`${corrected} caras orientadas automáticamente hacia dentro. `:'')+(result.valid?'Recinto validado: caras D y envolvente cerrada. Pulsa Calcular recinto validado. '+(result.warnings||[]).join(' '):result.errors.join(' ')),!result.valid);persist();
  }catch(error){
  result=null;calculated=false;renderResult();
+ $('reviewStatus').dataset.state='error';
  $('reviewStatus').textContent='No se pudo revisar el recinto: '+error.message+' El modelo visible en el editor no implica que exista una envolvente acústica válida.';
  throw error;
  }
