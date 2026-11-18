@@ -97,12 +97,22 @@ $('file').onchange=event=>action(async()=>{
  }
 });
 async function reviewRoom(orient=true){
- message('Revisando orientación D/F y cierre de la envolvente…');await syncModel(model?.name);
+ $('reviewStatus').textContent='Extrayendo las caras del dibujo…';
+ message('Extrayendo las caras del dibujo para revisar el recinto…');
+ try{
+ await syncModel(model?.name);
+ $('reviewStatus').textContent=`Revisando ${model.faces.length} caras…`;
+ message(`Revisando orientación y cierre de ${model.faces.length} caras…`);
  result=await compute('review',{faces:model.faces,options:{thick:$('thickModel').checked,flipped:[...orientationOverrides],orient}});
  if(result.orientation_valid)assignFaceDefaults(result.faces,faceProperties);
  for(const key of result.reversed_keys){if(orientationOverrides.has(key))orientationOverrides.delete(key);else orientationOverrides.add(key);}
  reviewedHash=lastEditorHash;calculated=false;mode='acoustic';renderResult();draw();setResults(false);
  const corrected=result.reversed_keys.length;message((corrected?`${corrected} caras orientadas automáticamente hacia dentro. `:'')+(result.valid?'Recinto validado: caras D y envolvente cerrada. Pulsa Calcular recinto validado.':result.errors.join(' ')),!result.valid);persist();
+ }catch(error){
+ result=null;calculated=false;renderResult();
+ $('reviewStatus').textContent='No se pudo revisar el recinto: '+error.message+' El modelo visible en el editor no implica que exista una envolvente acústica válida.';
+ throw error;
+ }
 }
 $('extract').onclick=()=>action(()=>reviewRoom());
 $('orientFaces').onclick=()=>action(()=>reviewRoom(true));
