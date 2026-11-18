@@ -70,7 +70,7 @@ function draw(){
  if($('roof').checked)faces=faces.filter(f=>!(Math.abs(f.normal[2])>.99&&f.centroid[2]>center[2]));
  const projected=faces.map(f=>({f,loops:[f.outer,...f.holes].map(l=>l.map(project)),depth:camera(f.centroid)[2]})).sort((a,b)=>b.depth-a.depth);
  projectedFaces=projected;
- for(const {f,loops} of projected){const selected=selectedFace&&faceKey(f)===faceKey(selectedFace);ctx.beginPath();for(const loop of loops){loop.forEach((p,j)=>j?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.closePath();}ctx.fillStyle=selected?'rgba(255,166,61,.82)':acoustic?(f.orientation!=='D'?'rgba(230,115,85,.55)':'rgba(94,192,160,.38)'):'rgba(112,144,170,.32)';ctx.fill('evenodd');ctx.strokeStyle=selected?'#ffe4aa':acoustic?'#81d9b8':'#9db1c3';ctx.lineWidth=selected?3:acoustic?1.3:.8;ctx.stroke();if(acoustic&&f.orientation){const p=project(f.centroid);ctx.fillStyle=f.orientation==='D'?'#b8ffe3':'#ffb09a';ctx.font='bold 13px Segoe UI';ctx.fillText(`${faceProperties[faceKey(f)]?.name||f.id} · ${f.orientation}`,p[0],p[1]);}}
+ for(const {f,loops} of projected){const selected=selectedFace&&faceKey(f)===faceKey(selectedFace);ctx.beginPath();for(const loop of loops){loop.forEach((p,j)=>j?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.closePath();}ctx.fillStyle=selected?'rgba(255,166,61,.82)':acoustic?(f.orientation!=='D'?'rgba(230,115,85,.55)':'rgba(94,192,160,.38)'):'rgba(112,144,170,.32)';ctx.fill('evenodd');ctx.strokeStyle=selected?'#ffe4aa':acoustic?'#81d9b8':'#9db1c3';ctx.lineWidth=selected?3:acoustic?1.3:.8;ctx.stroke();if(acoustic&&f.orientation&&$('faceLabels').checked){const p=project(f.centroid);ctx.fillStyle=f.orientation==='D'?'#b8ffe3':'#ffb09a';ctx.font='bold 13px Segoe UI';ctx.fillText(`${faceProperties[faceKey(f)]?.name||f.id} · ${f.orientation}`,p[0],p[1]);}}
 
  if(closurePreview){
   for(const edge of [...closurePreview.boundary,...closurePreview.incompatible]){const a=project(edge.a),b=project(edge.b);ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.strokeStyle=closurePreview.incompatible.includes(edge)?'#ff6c79':'#ffb54a';ctx.lineWidth=3;ctx.stroke();}
@@ -132,6 +132,8 @@ $('calculateRoom').onclick=()=>action(async()=>{if(!result?.valid)throw Error('R
 $('thickModel').onchange=()=>{result=null;calculated=false;renderResult();};
 $('invertAcousticFace').onclick=()=>action(async()=>{if(!selectedFace||!result)return;const key=faceKey(selectedFace);if(orientationOverrides.has(key))orientationOverrides.delete(key);else orientationOverrides.add(key);await reviewRoom(false);});
 for(const view of ['drawing','architecture','acoustic'])$(view).onclick=()=>{mode=view==='drawing'?'editor':view;renderResult();draw();};
+try{$('faceLabels').checked=localStorage.getItem('revera-face-labels')==='true';}catch{}
+$('faceLabels').onchange=()=>{try{localStorage.setItem('revera-face-labels',String($('faceLabels').checked));}catch{}draw();};
 $('roof').onchange=draw;$('fit').onclick=()=>{zoom=1;yaw=-.8;pitch=.55;draw();};
 for(const id of ['sx','sy','sz','surfaceOnly'])$(id).oninput=()=>{if(result){result=null;mode='architecture';renderResult();message('Cambió el punto interior. Genera nuevamente el modelo acústico.');}draw();};
 $('save').onclick=()=>action(async()=>{await syncModel(model?.name);download(new Blob([JSON.stringify({format:'revera',version:2,model,faceProperties,simulation,orientationOverrides:[...orientationOverrides],thickModel:$('thickModel').checked,seed:seed()},null,2)],{type:'application/json'}),'proyecto.revera');persist();message('Proyecto descargado con el dibujo actual del editor.');});
