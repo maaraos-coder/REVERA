@@ -165,7 +165,7 @@ window.addEventListener('revera-editor-ready',async event=>{
  if(hash)lastEditorHash=hash;
 });
 try{if(localStorage.getItem('revera-project-v2'))$('localStatus').textContent='Hay un proyecto anterior disponible para recuperar';}catch{}
-renderResult();message('Dibuja con el editor, importa un archivo o crea una sala de prueba. Después genera su envolvente acústica.');
+renderResult();message('Dibuja en el editor o importa un modelo desde Archivo. Después revisa su envolvente acústica.');
 
 // Drawing-first workspace: layout controls never reload the editor iframe.
 const panelToggle=$('panelToggle'),focusToggle=$('focusToggle');
