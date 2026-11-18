@@ -101,7 +101,7 @@ window.reveraInstall=(deps,createScene)=>{
      const tree=rpc(scratch,'hew.query.scene'),objects=[];
      const walk=nodes=>nodes.forEach(n=>{if(n.kind==='object')objects.push(n);else if(n.kind==='group')walk(n.members||[]);else if(n.kind==='instance')throw Error('Una instancia no pudo expandirse.');});walk(tree.tree);
      if(objects.length>500)throw Error('Simplifica el modelo a un máximo de 500 objetos.');
-     const faces=[];for(const obj of objects){for(const f of rpc(scratch,'hew.query.faces',{object:obj.id}).faces)faces.push({...f,id:`f${faces.length}`,name:obj.name||obj.id,is_solid:obj.watertight});}
+     const faces=[];for(const obj of objects){for(const f of rpc(scratch,'hew.query.faces',{object:obj.id}).faces){faces.push({...f,id:`f${faces.length}`,name:obj.name||obj.id,is_solid:obj.watertight});if(faces.length>5000)throw Error('El modelo supera las 5.000 caras admitidas. Importa una envolvente simplificada del recinto, sin mobiliario ni detalles constructivos.');}}
      if(faces.length>5000)throw Error('Simplifica el modelo a un máximo de 5.000 caras.');
      result={name:params.name||'Dibujo del editor',faces,materials:tree.materials,warnings:[],editor_bytes:b64(scene.save())};
     }finally{scratch.free();}
