@@ -397,3 +397,11 @@ window.addEventListener('revera-file-action',event=>runFileAction(event.detail))
 window.addEventListener('keydown',event=>{const command=fileShortcut(event);if(command){event.preventDefault();runFileAction(command);}if(event.key==='Escape')$('fileMenu').open=false;},true);
 document.addEventListener('pointerdown',event=>{if(!$('fileMenu').contains(event.target))$('fileMenu').open=false;});
 $('fileMenu').addEventListener('keydown',event=>{if(!['ArrowDown','ArrowUp'].includes(event.key))return;event.preventDefault();$('fileMenu').open=true;const buttons=[...$('fileMenu').querySelectorAll('button')],index=buttons.indexOf(document.activeElement),next=(index+(event.key==='ArrowDown'?1:-1)+buttons.length)%buttons.length;buttons[next].focus();});
+
+window.addEventListener('revera-acoustic-tool',event=>{
+ if(busy||!['sources','receivers'].includes(event.detail))return;
+ mode='editor';renderResult();showProject(4);setPanelHidden(false);resetPointForm();$('simKind').value=event.detail;setSimulationKind();
+ $('projectPanel').querySelector('h1').textContent=event.detail==='sources'?'Fuente sonora':'Receptor acústico';
+ $('simSubmit').textContent=event.detail==='sources'?'Añadir fuente':'Añadir receptor';
+ $('simName').focus();message(event.detail==='sources'?'Define la posición y la potencia sonora por banda de la fuente.':'Define la posición del punto de escucha dentro del recinto.');
+});
