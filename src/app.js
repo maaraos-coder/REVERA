@@ -11,10 +11,16 @@ const $=id=>document.getElementById(id);
 let simulation=defaultSimulation(),editingPoint=null,lastSpps=null,lastMap=null;
 let reviewedHash=null,calculated=false,orientationOverrides=new Set();
 let model=null,result=null,mode='editor',busy=false,editorReady=false,lastEditorHash=null;
-const worker=new Worker(new URL('./geometry-worker.js',import.meta.url),{type:'module'});
 let job=0;const jobs=new Map();
-worker.onmessage=({data})=>{const pending=jobs.get(data.id);if(!pending)return;clearTimeout(pending.timer);jobs.delete(data.id);data.error?pending.reject(Error(data.error)):pending.resolve(data.result);};
-function compute(method,body){return new Promise((resolve,reject)=>{const id=++job;const timer=setTimeout(()=>{jobs.delete(id);reject(Error('La geometría tardó demasiado. Simplifica el modelo.'));},45000);jobs.set(id,{resolve,reject,timer});worker.postMessage({id,method,...body});});}
+function createGeometryWorker(){
+ const next=new Worker(new URL('./geometry-worker.js',import.meta.url),{type:'module'});
+ next.onmessage=({data})=>{const pending=jobs.get(data.id);if(!pending)return;clearTimeout(pending.timer);jobs.delete(data.id);data.error?pending.reject(Error(data.error)):pending.resolve(data.result);};
+ next.onerror=()=>resetGeometryWorker('No se pudo procesar la geometría. Puedes volver a intentar la revisión.');
+ return next;
+}
+let worker=createGeometryWorker();
+function resetGeometryWorker(reason){worker.terminate();for(const pending of jobs.values()){clearTimeout(pending.timer);pending.reject(Error(reason));}jobs.clear();worker=createGeometryWorker();}
+function compute(method,body){return new Promise((resolve,reject)=>{const id=++job;const timer=setTimeout(()=>resetGeometryWorker('La geometría tardó demasiado. Simplifica el modelo; el procesador se ha reiniciado para permitir otro intento.'),45000);jobs.set(id,{resolve,reject,timer});worker.postMessage({id,method,...body});});}
 
 const canvas=$('view'),ctx=canvas.getContext('2d');
 let eraseSelection=false;
@@ -28,7 +34,7 @@ function renderResult(){
  canvas.setAttribute('aria-label',mode==='map'?'Mapa acústico por receptores':'Vista tridimensional interactiva del modelo');$('mapView').disabled=!lastMap;$('mapView').setAttribute('aria-pressed',String(mode==='map'));$('mapControls').hidden=mode!=='map';
  $('calculateRoom').disabled=busy||!result?.valid;
  $('orientFaces').disabled=busy||!result||result.orientation_valid;
- $('reviewStatus').textContent=!result?'Pendiente de revisión.':result.valid?'Validado: todas las caras D y envolvente cerrada.':result.errors.join(' ');
+ $('reviewStatus').textContent=!result?'Pendiente de revisión.':result.valid?'Validado: todas las caras D y envolvente cerrada. '+(result.warnings||[]).join(' '):result.errors.join(' ');
  renderAbsorption();
  $('drawing').setAttribute('aria-pressed',String(mode==='editor'));
  $('editor').hidden=mode!=='editor';canvas.hidden=mode==='editor';$('canvasLabels').hidden=mode==='editor'||mode==='map';
@@ -107,7 +113,7 @@ async function reviewRoom(orient=true){
  if(result.orientation_valid)assignFaceDefaults(result.faces,faceProperties);
  for(const key of result.reversed_keys){if(orientationOverrides.has(key))orientationOverrides.delete(key);else orientationOverrides.add(key);}
  reviewedHash=lastEditorHash;calculated=false;mode='acoustic';renderResult();draw();setResults(false);
- const corrected=result.reversed_keys.length;message((corrected?`${corrected} caras orientadas automáticamente hacia dentro. `:'')+(result.valid?'Recinto validado: caras D y envolvente cerrada. Pulsa Calcular recinto validado.':result.errors.join(' ')),!result.valid);persist();
+ const corrected=result.reversed_keys.length;message((corrected?`${corrected} caras orientadas automáticamente hacia dentro. `:'')+(result.valid?'Recinto validado: caras D y envolvente cerrada. Pulsa Calcular recinto validado. '+(result.warnings||[]).join(' '):result.errors.join(' ')),!result.valid);persist();
  }catch(error){
  result=null;calculated=false;renderResult();
  $('reviewStatus').textContent='No se pudo revisar el recinto: '+error.message+' El modelo visible en el editor no implica que exista una envolvente acústica válida.';

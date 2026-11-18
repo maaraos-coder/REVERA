@@ -24,6 +24,7 @@ export function isInsideRoom(room,position){
 }
 export function createSimulationJob(room,properties,state){
  if(!room?.valid)throw Error('Revisa primero la orientación y el cierre del recinto.');
+ if(room.convex===false)throw Error('El recinto es cóncavo: área, volumen y TCR están disponibles, pero SPPS y los mapas requieren un mallado que esta versión aún no implementa.');
  const simulation=normalizeSimulation(state);
  if(!simulation.sources.length||!simulation.receivers.length)throw Error('Añade al menos una fuente y un receptor.');
  for(const item of [...simulation.sources,...simulation.receivers])if(!isInsideRoom(room,item.position))throw Error(`${item.name}: debe estar dentro del recinto, separado de las caras.`);
