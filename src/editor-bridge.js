@@ -108,8 +108,8 @@ window.reveraInstall=(deps,createScene)=>{
     const label=params.action==='print'?'Imprimir...':'Exportar...';
     const fileButton=[...document.querySelectorAll('button')].find(b=>['Archivo','File'].includes(b.textContent.trim()));if(!fileButton)throw Error('Menú del dibujo no disponible.');
     fileButton.click();await new Promise(resolve=>requestAnimationFrame(resolve));
-    const item=[...document.querySelectorAll('button,[role="menuitem"]')].find(b=>b.textContent.trim().replaceAll('…','...').startsWith(label));
-    if(!item)throw Error('La opción de exportación del editor no está disponible.');item.click();result={done:true};
+    const item=[...document.querySelectorAll('button,[role="menuitem"],span')].find(b=>b.textContent.trim().replaceAll('…','...')===label);
+    if(!item){fileButton.click();throw Error('La opción de exportación del editor no está disponible.');}item.click();result={done:true};
    }
    else if(method==='snapshot'){
     // Host export preserves non-solid sheets. API export intentionally filters
