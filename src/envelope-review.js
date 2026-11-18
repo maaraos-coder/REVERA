@@ -1,4 +1,4 @@
-import {topologyReview} from './surface-topology.js';
+import {closedTopology,topologyReview} from './surface-topology.js';
 import {prepare,validate,extract} from './geometry.js';
 import {faceKey} from './face-selection.js';
 export function reviewEnvelope(raw,{thick=false,flipped=[],orient=false}={}){
@@ -10,6 +10,8 @@ export function reviewEnvelope(raw,{thick=false,flipped=[],orient=false}={}){
   const overrides=new Set(flipped);const input=original.map(f=>{const key=faceKey(f);return {...(overrides.has(key)?reverse(f):f),source_key:f.source_key||key};});
   const report=topologyReview(input,{orient});
   if(report){const errors=[...report.errors];if(report.outside)errors.unshift(`Revisa la orientación de ${report.outside} caras. Usa Orientar caras hacia dentro (D) o invierte cada cara.`);const valid=!errors.length;return {valid,errors,faces:report.faces,face_count:report.faces.length,surface_m2:report.faces.reduce((s,f)=>s+f.area,0),volume_m3:valid?report.volume:null,orientation_valid:report.outside===0,outside_count:report.outside,reversed_keys:report.reversed.map(faceKey),convex:report.convex,scope:'Una envolvente cerrada y conectada. SPPS espacial requiere un recinto convexo.',warnings:!report.convex?['Recinto cóncavo: área, volumen y TCR disponibles; el mallado SPPS actual no admite esta geometría.']:[]};}
+  const topology=closedTopology(input);
+  return {valid:false,errors:[topology.conflict?'La orientación de la malla es incompatible: revisa las conexiones entre caras.':`Envolvente abierta o encuentros incompatibles: ${topology.badEdges} aristas por revisar. Conserva una envolvente de aire cerrada; las líneas de dibujo, el mobiliario y las superficies sueltas no cierran el recinto.`],faces:input.map(f=>({...f,orientation:'?'})),face_count:input.length,surface_m2:input.reduce((sum,f)=>sum+f.area,0),volume_m3:null,orientation_valid:false,outside_count:input.length,reversed_keys:[],scope:'La orientación interior solo se confirma en una envolvente cerrada y conectada.'};
  }
  const lo=[Infinity,Infinity,Infinity],hi=[-Infinity,-Infinity,-Infinity];for(const f of original)for(const p of f.outer)for(let k=0;k<3;k++){lo[k]=Math.min(lo[k],p[k]);hi[k]=Math.max(hi[k],p[k]);}const center=lo.map((v,k)=>(v+hi[k])/2);
  // This is a geometric reference computed from the model, never a user input.

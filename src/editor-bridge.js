@@ -96,15 +96,9 @@ window.reveraInstall=(deps,createScene)=>{
     // Host export preserves non-solid sheets. API export intentionally filters
     // them, which is inappropriate for an acoustic surface model.
     const bytes=scene.export('glb',0);if(!bytes?.length)throw Error('Dibuja o importa un recinto antes de generar el modelo acústico.');
-    const scratch=createScene();try{
-     rpc(scratch,'hew.doc.import',{path:'world.glb',bytes_base64:b64(bytes)});
-     const tree=rpc(scratch,'hew.query.scene'),objects=[];
-     const walk=nodes=>nodes.forEach(n=>{if(n.kind==='object')objects.push(n);else if(n.kind==='group')walk(n.members||[]);else if(n.kind==='instance')throw Error('Una instancia no pudo expandirse.');});walk(tree.tree);
-     if(objects.length>500)throw Error('Simplifica el modelo a un máximo de 500 objetos.');
-     const faces=[];for(const obj of objects){for(const f of rpc(scratch,'hew.query.faces',{object:obj.id}).faces){faces.push({...f,id:`f${faces.length}`,name:obj.name||obj.id,is_solid:obj.watertight});if(faces.length>5000)throw Error('El modelo supera las 5.000 caras admitidas. Importa una envolvente simplificada del recinto, sin mobiliario ni detalles constructivos.');}}
-     if(faces.length>5000)throw Error('Simplifica el modelo a un máximo de 5.000 caras.');
-     result={name:params.name||'Dibujo del editor',faces,materials:tree.materials,warnings:[],editor_bytes:b64(scene.save())};
-    }finally{scratch.free();}
+    const {glbSurfaces}=await import('/glb-surfaces.js');
+    const geometry=glbSurfaces(bytes);
+    result={name:params.name||'Dibujo del editor',...geometry,editor_bytes:b64(scene.save())};
    }else if(method==='demo'){
     // Never replace an existing drawing silently. Parent asks explicitly.
     const {commands}=params;scene.load(new Uint8Array(params.blank));
