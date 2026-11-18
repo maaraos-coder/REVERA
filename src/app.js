@@ -25,11 +25,12 @@ function compute(method,body){return new Promise((resolve,reject)=>{const id=++j
 const canvas=$('view'),ctx=canvas.getContext('2d');
 let eraseSelection=false;
 let selectedFace=null,faceProperties={},projectedFaces=[],faceSelection=false;
+let closurePreview=null,closureHash=null,closureUndoHash=null,selectedClosures=new Set();
 let yaw=-.8,pitch=.55,zoom=1,drag=null;
-const controls=['calculateMap','runSpps','simExport','orientFaces','calculateRoom','demo','extract','file','project','save','sync','saveHew','faceMode','eraseFaces'];
+const controls=['detectClosures','applyClosures','undoClosure','calculateMap','runSpps','simExport','orientFaces','calculateRoom','demo','extract','file','project','save','sync','saveHew','faceMode','eraseFaces'];
 function message(text,error=false){$('message').textContent=text;$('message').style.borderColor=error?'#edab77':'#80cbb4';}
-async function action(fn){if(busy)return;busy=true;controls.forEach(id=>$(id).disabled=true);try{await fn();}catch(e){message(e.message,true);}finally{busy=false;controls.forEach(id=>$(id).disabled=false);$('save').disabled=!editorReady;$('extract').disabled=!editorReady;$('calculateRoom').disabled=!result?.valid;$('orientFaces').disabled=!result||result.orientation_valid;}}
-function load(data){calculated=false;clearFace();model=data;result=null;mode='architecture';zoom=1;$('modelName').textContent=data.name;renderResult();message(data.warnings?.join(' ')||'Modelo cargado. Revisa la orientación D/F y el cierre del recinto.');draw();}
+async function action(fn){if(busy)return;busy=true;controls.forEach(id=>$(id).disabled=true);try{await fn();}catch(e){message(e.message,true);}finally{busy=false;controls.forEach(id=>$(id).disabled=false);$('save').disabled=!editorReady;$('extract').disabled=!editorReady;$('calculateRoom').disabled=!result?.valid;$('orientFaces').disabled=!result||result.orientation_valid;updateClosureButtons();}}
+function load(data){closurePreview=null;closureHash=null;selectedClosures.clear();$('closureList').replaceChildren();updateClosureButtons();calculated=false;clearFace();model=data;result=null;mode='architecture';zoom=1;$('modelName').textContent=data.name;renderResult();message(data.warnings?.join(' ')||'Modelo cargado. Revisa la orientación D/F y el cierre del recinto.');draw();}
 function renderResult(){
  canvas.setAttribute('aria-label',mode==='map'?'Mapa acústico por receptores':'Vista tridimensional interactiva del modelo');$('mapView').disabled=!lastMap;$('mapView').setAttribute('aria-pressed',String(mode==='map'));$('mapControls').hidden=mode!=='map';
  $('calculateRoom').disabled=busy||!result?.valid;
@@ -71,6 +72,10 @@ function draw(){
  projectedFaces=projected;
  for(const {f,loops} of projected){const selected=selectedFace&&faceKey(f)===faceKey(selectedFace);ctx.beginPath();for(const loop of loops){loop.forEach((p,j)=>j?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.closePath();}ctx.fillStyle=selected?'rgba(255,166,61,.82)':acoustic?(f.orientation!=='D'?'rgba(230,115,85,.55)':'rgba(94,192,160,.38)'):'rgba(112,144,170,.32)';ctx.fill('evenodd');ctx.strokeStyle=selected?'#ffe4aa':acoustic?'#81d9b8':'#9db1c3';ctx.lineWidth=selected?3:acoustic?1.3:.8;ctx.stroke();if(acoustic&&f.orientation){const p=project(f.centroid);ctx.fillStyle=f.orientation==='D'?'#b8ffe3':'#ffb09a';ctx.font='bold 13px Segoe UI';ctx.fillText(`${faceProperties[faceKey(f)]?.name||f.id} · ${f.orientation}`,p[0],p[1]);}}
 
+ if(closurePreview){
+  for(const edge of [...closurePreview.boundary,...closurePreview.incompatible]){const a=project(edge.a),b=project(edge.b);ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.strokeStyle=closurePreview.incompatible.includes(edge)?'#ff6c79':'#ffb54a';ctx.lineWidth=3;ctx.stroke();}
+  for(const hole of closurePreview.loops){const points=hole.loop.map(project);if(selectedClosures.has(hole.id)){ctx.beginPath();points.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.closePath();ctx.fillStyle='rgba(70,170,255,.48)';ctx.fill();ctx.strokeStyle='#85caff';ctx.lineWidth=3;ctx.stroke();}const center=points.reduce((s,p)=>[s[0]+p[0]/points.length,s[1]+p[1]/points.length],[0,0]);ctx.fillStyle='#fff3ce';ctx.font='bold 14px Segoe UI';ctx.fillText(hole.id,center[0],center[1]);}
+ }
  for(const [kind,items] of Object.entries(simulation)){for(const item of items){const p=project(item.position);ctx.fillStyle=kind==='sources'?'#ffb35d':'#70d9ff';ctx.strokeStyle='#101925';ctx.lineWidth=2;ctx.beginPath();ctx.arc(p[0],p[1],6,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.font='bold 12px Segoe UI';ctx.fillText(item.name,p[0]+10,p[1]-8);}}
  ctx.fillStyle='#abc0ce';ctx.font='11px Segoe UI';ctx.fillText('Z ↑ · unidades: metros',18,h-42);
 }
@@ -151,6 +156,7 @@ new ResizeObserver(draw).observe(canvas);
 window.addEventListener('revera-editor-ready',async event=>{
  if(!editorReady){editorReady=true;$('status').textContent='Editor 3D conectado · procesamiento en tu navegador';$('extract').disabled=false;$('save').disabled=false;}
  const hash=event.detail?.hash;if(eraseSelection&&!busy&&hash&&lastEditorHash&&hash!==lastEditorHash){setEraseState(false);editorCall('erase-mode',{enabled:false}).catch(()=>{});}if(faceEditHash&&hash&&hash!==faceEditHash){setFaceUndo(false);faceEditHash=null;}if(hash&&lastEditorHash&&hash!==lastEditorHash){clearFace();if(faceSelection){faceSelection=false;$('faceMode').setAttribute('aria-pressed','false');editorCall('face-mode',{enabled:false}).catch(()=>{});message('Cambió la geometría. Activa de nuevo Propiedades de cara para actualizar las superficies.');}}if(hash&&lastEditorHash&&hash!==lastEditorHash&&result){result=null;mode=mode==='acoustic'?'editor':mode;renderResult();message('Cambió el dibujo. Genera nuevamente el modelo acústico para actualizar sus resultados.');}
+ if(hash&&closureHash&&hash!==closureHash){closurePreview=null;closureHash=null;selectedClosures.clear();$('closureList').replaceChildren();$('closureStatus').textContent='El dibujo cambió. Detecta los bordes nuevamente.';updateClosureButtons();draw();}
  if(hash)lastEditorHash=hash;
 });
 try{if(localStorage.getItem('revera-project-v2'))$('localStatus').textContent='Hay un proyecto anterior disponible para recuperar';}catch{}
@@ -336,3 +342,32 @@ function drawMap(){
  ctx.fillText(valid.length?`Escala ${min.toFixed(2)} — ${max.toFixed(2)} · ${metric==='STI'?'sin ruido ni enmascaramiento':''}`:'No evaluable: completa 8000 Hz para STI o aumenta la duración para los tiempos.',22,h-22);
  for(const s of simulation.sources){const q=xy(s.position);ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(...q,5,0,2*Math.PI);ctx.fill();ctx.fillText(s.name,q[0]+8,q[1]-8);}
 }
+
+function updateClosureButtons(){
+ $('applyClosures').disabled=busy||!closurePreview||!selectedClosures.size;
+ $('undoClosure').disabled=busy||!closureUndoHash;
+}
+$('detectClosures').onclick=()=>action(async()=>{
+ message('Detectando bordes abiertos y posibles cierres…');await syncModel(model?.name);
+ closurePreview=await compute('closures',{faces:model.faces});closureHash=lastEditorHash;selectedClosures.clear();
+ const list=$('closureList');list.replaceChildren();
+ for(const hole of closurePreview.loops){const label=document.createElement('label');label.className='surface-mode';const input=document.createElement('input');input.type='checkbox';input.disabled=!hole.eligible;input.setAttribute('aria-label','Previsualizar cierre '+hole.id);input.onchange=()=>{input.checked?selectedClosures.add(hole.id):selectedClosures.delete(hole.id);updateClosureButtons();draw();};label.append(input,document.createTextNode(hole.eligible?`${hole.id} · ${hole.area.toFixed(2)} m²`:hole.id+' · '+hole.reason));list.append(label);}
+ const candidates=closurePreview.loops.filter(h=>h.eligible).length;
+ $('closureStatus').textContent=`${closurePreview.openEdges} aristas abiertas; ${closurePreview.nonManifoldEdges} encuentros incompatibles; ${candidates} cierres planos propuestos; ${closurePreview.complex} conjuntos ramificados o complejos. Naranja: borde abierto. Rojo: encuentro incompatible. Azul: cierre seleccionado.`;
+ mode='architecture';$('roof').checked=false;renderResult();draw();setResults(false);
+ message(candidates?'Selecciona los cierres para ver la propuesta azul y después pulsa Aplicar cierres seleccionados.':'No hay cierres planos simples aplicables. Revisa los bordes resaltados y edita el dibujo.');
+});
+$('applyClosures').onclick=()=>action(async()=>{
+ const state=await editorCall('ping');if(!closurePreview||state.hash!==closureHash)throw Error('El dibujo cambió. Detecta los bordes nuevamente antes de cerrar.');
+ const faces=closurePreview.loops.filter(h=>h.eligible&&selectedClosures.has(h.id)).flatMap(h=>h.caps);if(!faces.length)throw Error('Selecciona un cierre para previsualizarlo antes de aplicar.');
+ const changed=await editorCall('add-closures',{hash:closureHash,faces});orientationOverrides.clear();
+ await reviewRoom(true);closureUndoHash=changed.hash;
+ $('closureStatus').textContent='Cierres añadidos al dibujo. '+(result?.valid?'La envolvente está cerrada y validada.':'La revisión detecta todavía problemas: '+(result?.errors||[]).join(' '));
+ message('Cierres añadidos como superficies editables. Asigna sus materiales acústicos. '+(result?.valid?'Recinto validado.':'Revisa los problemas de cierre restantes.'));
+});
+$('undoClosure').onclick=()=>action(async()=>{
+ if(!closureUndoHash)throw Error('No hay un cierre disponible para deshacer.');
+ await editorCall('undo-face',{hash:closureUndoHash});closureUndoHash=null;orientationOverrides.clear();await reviewRoom(true);$('closureStatus').textContent='Última operación de cierre deshecha.';
+});
+$('editClosure').onclick=()=>{mode='editor';renderResult();setPanelHidden(true);message('Edita los bordes con Línea o Rectángulo en el Editor 3D. Después vuelve a Modelo acústico → Detectar y mostrar bordes.');};
+updateClosureButtons();

@@ -92,6 +92,13 @@ window.reveraInstall=(deps,createScene)=>{
    else if(method==='delete-face'){directFace=false;const {removeDrawingFace}=await import('/face-edit.js');result=removeDrawingFace(scene,rpc,params.face);selectedFace=null;faceMode=false;eraseMode=false;document.body.classList?.toggle('revera-erasing',false);deps.getViewportApi()?.refreshScene();deps.reconcileVisibility?.();}
    else if(method==='undo-face'){if(params.hash!==scene.state_hash().toString())throw Error('El dibujo cambió después del borrado. Usa Editar → Deshacer para revisar el historial.');rpc(scene,'hew.history.undo');selectedFace=null;faceMode=false;eraseMode=false;document.body.classList?.toggle('revera-erasing',false);deps.getViewportApi()?.refreshScene();deps.reconcileVisibility?.();result={done:true};}
    else if(method==='ping')result={ready:true,version:'1.2.3',hash:scene.state_hash().toString(),objects:rpc(scene,'hew.query.scene').document.objects,sketches:rpc(scene,'hew.query.scene').document.sketches};
+   else if(method==='add-closures'){
+    if(params.hash!==scene.state_hash().toString())throw Error('El dibujo cambió. Detecta los bordes nuevamente.');
+    if(!Array.isArray(params.faces)||!params.faces.length||params.faces.length>512)throw Error('Selecciona entre 1 y 512 triángulos de cierre.');
+    const {surfaceDae}=await import('/face-edit.js');
+    scene.history_bracket_open();try{scene.import_dae(new TextEncoder().encode(surfaceDae(params.faces,'Cierres revisados')),{});scene.history_bracket_commit('Cerrar huecos revisados');}catch(error){scene.history_bracket_abort();throw error;}
+    selectedFace=null;refresh();result={done:true,hash:scene.state_hash().toString()};
+   }
    else if(method==='snapshot'){
     // Host export preserves non-solid sheets. API export intentionally filters
     // them, which is inappropriate for an acoustic surface model.
