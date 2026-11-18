@@ -1,0 +1,4 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {fileActions,fileShortcut} from '../src/file-actions.js';
+test('file keyboard shortcuts target the complete REVERA project',()=>{assert.equal(fileShortcut({key:'s',ctrlKey:true}),'save');assert.equal(fileShortcut({key:'S',metaKey:true,shiftKey:true}),'save');assert.equal(fileShortcut({key:'o',ctrlKey:true}),'open');assert.equal(fileShortcut({key:'O',ctrlKey:true,shiftKey:true}),'import');assert.equal(fileShortcut({key:'n',metaKey:true}),'new');});
+test('drawing shortcuts, repeats and alt combinations remain untouched',()=>{for(const event of [{key:'s'},{key:'o',ctrlKey:true,repeat:true},{key:'n',metaKey:true,altKey:true},{key:'z',ctrlKey:true}])assert.equal(fileShortcut(event),null);});
+test('file commands use a bounded vocabulary',()=>{assert.equal(fileActions.has('open'),true);assert.equal(fileActions.has('save-drawing'),true);assert.equal(fileActions.has('delete'),false);});

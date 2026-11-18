@@ -1,3 +1,4 @@
+import {fileActions,fileShortcut} from './file-actions.js';
 import {mapGrid,sectionPolygon,mapValue,colorScale,mapDomain} from './acoustic-map.js';
 import {defaultSimulation,normalizeSimulation,isInsideRoom,createSimulationJob} from './simulation.js';
 import {calculateTcr} from './tcr.js';
@@ -375,3 +376,24 @@ $('undoClosure').onclick=()=>action(async()=>{
 });
 $('editClosure').onclick=()=>{mode='editor';renderResult();setPanelHidden(true);message('Edita los bordes con Línea o Rectángulo en el Editor 3D. Después vuelve a Modelo acústico → Detectar y mostrar bordes.');};
 updateClosureButtons();
+
+function runFileAction(command){
+ if(!fileActions.has(command)||busy)return;
+ $('fileMenu').open=false;
+ if(command==='open'){$('project').value='';$('project').click();return;}
+ if(command==='import'){$('file').value='';$('file').click();return;}
+ if(command==='save'){$('save').click();return;}
+ if(command==='save-drawing'){$('saveHew').click();return;}
+ if(command==='recover'){$('restoreLocal').click();return;}
+ if(command==='import-options'){showProject(0);setPanelHidden(false);projectGroups[0].querySelector('.import-options').open=true;return;}
+ if(command==='export-drawing'||command==='print'){mode='editor';renderResult();action(()=>editorCall('native-file-action',{action:command}));return;}
+ if(command==='new')action(async()=>{
+  const current=await editorCall('ping');if((current.objects||current.sketches||model)&&!confirm('Crear un proyecto nuevo reemplazará el dibujo y los datos actuales. Guarda el proyecto antes de continuar. ¿Crear proyecto nuevo?'))return;
+  await editorCall('new-project');model=null;result=null;reviewedHash=null;calculated=false;faceProperties={};simulation=defaultSimulation();lastSpps=null;lastMap=null;orientationOverrides.clear();closurePreview=null;closureHash=null;closureUndoHash=null;selectedClosures.clear();clearFace();renderSimulation();resetPointForm();mode='editor';renderResult();draw();$('closureList').replaceChildren();$('closureStatus').textContent='';message('Proyecto nuevo. Importa un modelo desde Archivo o empieza a dibujar.');
+ });
+}
+for(const button of document.querySelectorAll('[data-file-action]'))button.onclick=()=>runFileAction(button.dataset.fileAction);
+window.addEventListener('revera-file-action',event=>runFileAction(event.detail));
+window.addEventListener('keydown',event=>{const command=fileShortcut(event);if(command){event.preventDefault();runFileAction(command);}if(event.key==='Escape')$('fileMenu').open=false;},true);
+document.addEventListener('pointerdown',event=>{if(!$('fileMenu').contains(event.target))$('fileMenu').open=false;});
+$('fileMenu').addEventListener('keydown',event=>{if(!['ArrowDown','ArrowUp'].includes(event.key))return;event.preventDefault();$('fileMenu').open=true;const buttons=[...$('fileMenu').querySelectorAll('button')],index=buttons.indexOf(document.activeElement),next=(index+(event.key==='ArrowDown'?1:-1)+buttons.length)%buttons.length;buttons[next].focus();});

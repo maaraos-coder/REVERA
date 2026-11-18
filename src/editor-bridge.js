@@ -28,6 +28,7 @@ function brandEditor(root){
  "Add Scene":"Añadir escena","Choose color…":"Elegir color…","Choose color...":"Elegir color…","Purge Unused…":"Eliminar elementos sin uso…","Purge Unused...":"Eliminar elementos sin uso…","Filter materials":"Filtrar materiales","Name":"Nombre","Texture":"Textura","Cancel":"Cancelar","Apply":"Aplicar","Model":"Modelo",
  "Polygon":"Polígono","Arc":"Arco","Follow Me":"Seguir recorrido","Offset":"Equidistancia","Rotate":"Rotar","Scale":"Escalar","Tape Measure":"Cinta métrica","Dimension":"Cota","Section Plane":"Plano de sección","Library":"Biblioteca","MODIFY":"MODIFICAR","INSPECT":"MEDIR","DRAW":"DIBUJAR","Modify":"Modificar","Inspect":"Medir","Draw":"Dibujar","Paint":"Pintar","Select":"Seleccionar","Push/Pull":"Empujar/tirar","Line":"Línea","Rectangle":"Rectángulo","Circle":"Círculo","Move":"Mover"
  }))text=text.trim()===en?text.replace(en,es):text.replaceAll(en.length>25?en:'\u0000',es);return text.replace(/^Opacity(?=\s|$)/,'Opacidad').replace(/(\d+) objects?\b/g,'$1 objetos').replace(/\bsolid\b/g,'sólido');};
+ for(const button of root.querySelectorAll?.('button')||[]){if(['File','Archivo'].includes(button.textContent?.trim()))button.hidden=true;}
  const walk=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);
  while(walk.nextNode()){const node=walk.currentNode;if(node.parentElement?.closest('script,style,textarea,input,[contenteditable]'))continue;const next=rename(node.nodeValue);if(next!==node.nodeValue)node.nodeValue=next;}
  for(const element of root.querySelectorAll?.('[title],[aria-label],[alt],[placeholder]')||[]){for(const attr of ['title','aria-label','alt','placeholder']){const value=element.getAttribute(attr);if(value){const next=attr==='aria-label'?value.replace(/\bHew\b|\bHEW\b/g,'REVERA'):rename(value);if(next!==value)element.setAttribute(attr,next);}}}
@@ -44,6 +45,9 @@ window.reveraInstall=(deps,createScene)=>{
  const overlay=document.createElement('canvas');Object.assign(overlay.style,{position:'fixed',pointerEvents:'none',zIndex:'1000'});document.body.append(overlay);
  const renderer=()=>[...document.querySelectorAll('canvas')].filter(c=>c!==overlay).sort((a,b)=>b.clientWidth*b.clientHeight-a.clientWidth*a.clientHeight)[0];
  let shortcutsCleanup=null,disposed=false;import('/shortcuts.js').then(({installShortcuts})=>{if(!disposed)shortcutsCleanup=installShortcuts(deps,renderer);});
+ let shortcutAction=null;import('/file-actions.js').then(module=>{shortcutAction=module.fileShortcut;});
+ function fileKeys(event){const action=shortcutAction?.(event);if(!action)return;event.preventDefault();event.stopImmediatePropagation();parent.postMessage({channel:'revera-file-action',action},location.origin);}
+ window.addEventListener('keydown',fileKeys,true);
  let down=null;
  function activeDrawingTool(){return document.querySelector('[role="radio"][aria-checked="true"][aria-label]')?.getAttribute('aria-label');}
  function toggleDrawingEraser(e){if(!e.target.closest?.('button[title="Borrar caras"]'))return;e.preventDefault();e.stopImmediatePropagation();parent.postMessage({channel:'revera-erase-toggle'},location.origin);}
@@ -99,6 +103,14 @@ window.reveraInstall=(deps,createScene)=>{
     scene.history_bracket_open();try{scene.import_dae(new TextEncoder().encode(surfaceDae(params.faces,'Cierres revisados')),{});scene.history_bracket_commit('Cerrar huecos revisados');}catch(error){scene.history_bracket_abort();throw error;}
     selectedFace=null;refresh();result={done:true,hash:scene.state_hash().toString()};
    }
+   else if(method==='new-project'){scene.load(new Uint8Array(createBlank()));selectedFace=null;faceMode=false;eraseMode=false;directFace=false;refresh();result={done:true};}
+   else if(method==='native-file-action'){
+    const label=params.action==='print'?'Imprimir...':'Exportar...';
+    const fileButton=[...document.querySelectorAll('button')].find(b=>['Archivo','File'].includes(b.textContent.trim()));if(!fileButton)throw Error('Menú del dibujo no disponible.');
+    fileButton.click();await new Promise(resolve=>requestAnimationFrame(resolve));
+    const item=[...document.querySelectorAll('button,[role="menuitem"]')].find(b=>b.textContent.trim().replaceAll('…','...').startsWith(label));
+    if(!item)throw Error('La opción de exportación del editor no está disponible.');item.click();result={done:true};
+   }
    else if(method==='snapshot'){
     // Host export preserves non-solid sheets. API export intentionally filters
     // them, which is inappropriate for an acoustic surface model.
@@ -112,7 +124,7 @@ window.reveraInstall=(deps,createScene)=>{
     // The connection's attachment survives a load on the same Scene.
     for(const command of commands)rpc(scene,command.method,command.params);refresh();result={done:true};
    }else if(method==='import'){
-    if(!/\.(skp|glb|stl)$/i.test(params.name))throw Error('Formato no admitido por este importador.');
+    if(!/\.(skp|glb|stl|dae)$/i.test(params.name))throw Error('Formato no admitido por este importador.');
     result=rpc(scene,'hew.doc.import',{path:params.name,bytes_base64:params.bytes,units:params.units||'m'});refresh();
    }else if(method==='load'){
     const bytes=Uint8Array.from(atob(params.bytes),c=>c.charCodeAt(0));scene.load(bytes);refresh();result={done:true};
@@ -127,5 +139,5 @@ window.reveraInstall=(deps,createScene)=>{
  function createBlank(){const blank=createScene();try{return blank.save();}finally{blank.free();}}
  window.addEventListener('message',handle);
  const timer=setInterval(()=>{if(deps.getScene())parent.postMessage({channel:'revera-ready',hash:deps.getScene().state_hash().toString()},location.origin);},1500);
- return()=>{disposed=true;shortcutsCleanup?.();window.removeEventListener('pointermove',paintPointer,true);window.removeEventListener('click',toggleDrawingEraser,true);settingsStyle.remove();brandObserver.disconnect();toolObserver.disconnect();window.removeEventListener('keydown',guardKeys,true);window.removeEventListener('keyup',releaseDelete,true);window.removeEventListener('blur',releaseDelete);clearInterval(highlightTimer);overlay.remove();for(const type of ['pointerdown','pointerup','dblclick','click'])window.removeEventListener(type,capture,true);clearInterval(timer);window.removeEventListener('message',handle);if(last&&connection!==null)try{last.api_connection_close(connection);}catch{}};
+ return()=>{disposed=true;shortcutsCleanup?.();window.removeEventListener('keydown',fileKeys,true);window.removeEventListener('pointermove',paintPointer,true);window.removeEventListener('click',toggleDrawingEraser,true);settingsStyle.remove();brandObserver.disconnect();toolObserver.disconnect();window.removeEventListener('keydown',guardKeys,true);window.removeEventListener('keyup',releaseDelete,true);window.removeEventListener('blur',releaseDelete);clearInterval(highlightTimer);overlay.remove();for(const type of ['pointerdown','pointerup','dblclick','click'])window.removeEventListener(type,capture,true);clearInterval(timer);window.removeEventListener('message',handle);if(last&&connection!==null)try{last.api_connection_close(connection);}catch{}};
 };
