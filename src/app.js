@@ -75,7 +75,7 @@ function draw(){
  ctx.fillStyle='#abc0ce';ctx.font='11px Segoe UI';ctx.fillText('Z ↑ · unidades: metros',18,h-42);
 }
 async function syncModel(name){
- const data=await editorCall('snapshot',{name:name||'Dibujo del editor'});const current=await editorCall('ping');lastEditorHash=current.hash;data.faces=data.faces.map(prepare);data.surfaceOnly=$('surfaceOnly').checked;load(data);return data;
+ const data=await editorCall('snapshot',{name:name||'Dibujo del editor'});const current=await editorCall('ping');lastEditorHash=current.hash;const normalized=await compute('normalize',{faces:data.faces});data.faces=normalized.faces;data.warnings=[...(data.warnings||[]),...normalized.warnings];data.surfaceOnly=$('surfaceOnly').checked;load(data);return data;
 }
 $('sync').onclick=()=>action(async()=>{await syncModel();message('Dibujo actualizado. Revisa la orientación D/F y el cierre del recinto.');});
 $('demo').onclick=()=>action(async()=>{
@@ -110,6 +110,7 @@ async function reviewRoom(orient=true){
  $('reviewStatus').textContent=`Revisando ${model.faces.length} caras…`;
  message(`Revisando orientación y cierre de ${model.faces.length} caras…`);
  result=await compute('review',{faces:model.faces,options:{thick:$('thickModel').checked,flipped:[...orientationOverrides],orient}});
+ result.warnings=[...(model.warnings||[]),...(result.warnings||[])];
  if(result.orientation_valid)assignFaceDefaults(result.faces,faceProperties);
  for(const key of result.reversed_keys){if(orientationOverrides.has(key))orientationOverrides.delete(key);else orientationOverrides.add(key);}
  reviewedHash=lastEditorHash;calculated=false;mode='acoustic';renderResult();draw();setResults(false);

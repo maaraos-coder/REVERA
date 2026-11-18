@@ -6,7 +6,7 @@ const dot=(a,b)=>a.reduce((s,x,i)=>s+x*b[i],0);
 const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
 const norm=a=>Math.sqrt(dot(a,a));
 const pairs=loop=>loop.map((a,i)=>[a,loop[(i+1)%loop.length]]);
-const va=loop=>mul(pairs(loop).reduce((s,[a,b])=>add(s,cross(a,b)),[0,0,0]),.5);
+const va=loop=>{const origin=loop[0];return mul(pairs(loop).reduce((s,[a,b])=>add(s,cross(sub(a,origin),sub(b,origin))),[0,0,0]),.5);};
 export function prepare(raw,index=0){
  const clean=loop=>{if(!Array.isArray(loop)||loop.some(p=>!Array.isArray(p)||p.length!==3||p.some(v=>!Number.isFinite(v))))throw Error('Contorno inválido.');const out=loop.map(p=>[...p]);if(out.length>1&&norm(sub(out[0],out.at(-1)))<EPS)out.pop();if(out.length<3)throw Error('Cara con menos de tres vértices.');return out;};
  const outer=clean(raw.outer),holes=(raw.holes||[]).map(clean),v=va(outer),length=norm(v);
